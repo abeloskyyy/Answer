@@ -84,6 +84,8 @@ window.addEventListener('beforeunload', (e) => {
 btnLogin.addEventListener('click', () => {
     const name = usernameInput.value.trim();
     if (name) {
+        btnLogin.disabled = true; // Prevent double click
+        setTimeout(() => btnLogin.disabled = false, 2000); // Re-enable after delay
         myUsername = name;
         switchScreen('lobby-section');
     } else {
@@ -93,14 +95,19 @@ btnLogin.addEventListener('click', () => {
 
 // 2. Create Room
 btnCreateRoom.addEventListener('click', () => {
+    btnCreateRoom.disabled = true; // Prevent button spam
     socket.emit('create_room', myUsername);
+    // Re-enable if needed via error handling or if screen switches
+    setTimeout(() => btnCreateRoom.disabled = false, 5000);
 });
 
 // 3. Join Room
 btnJoinRoom.addEventListener('click', () => {
     const code = roomCodeInput.value.trim().toUpperCase();
     if (code) {
+        btnJoinRoom.disabled = true; // Prevent button spam
         socket.emit('join_room', { username: myUsername, roomId: code });
+        setTimeout(() => btnJoinRoom.disabled = false, 5000);
     } else {
         alert('Please enter a room code!');
     }
