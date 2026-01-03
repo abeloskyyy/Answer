@@ -300,3 +300,115 @@ button:active {
     background: #ccc;
     border-radius: 4px;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .container {
+        padding: 5px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .game-title {
+        font-size: 2.5rem;
+        margin-bottom: 20px;
+    }
+
+    /* Stack room header elements vertically */
+    .room-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+        text-align: center;
+        padding: 15px;
+    }
+
+    .room-info {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .room-actions {
+        justify-content: center;
+        width: 100%;
+        gap: 15px;
+    }
+
+    .btn-icon {
+        padding: 12px;
+        font-size: 1.2rem;
+        flex: 1;
+    }
+
+    /* Stack game area: Player list on top (collapsible/small), Chat below */
+    .game-area {
+        flex-direction: column;
+        height: auto;
+        flex: 1;
+        /* Take remaining space */
+        min-height: 0;
+        /* Allow shrinking */
+        gap: 10px;
+    }
+
+    .sidebar {
+        width: 100%;
+        height: auto;
+        max-height: 120px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar h4 {
+        margin: 0 0 5px 0;
+    }
+
+    #player-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+    }
+
+    #player-list li {
+        background: #f1f1f1;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+    }
+
+    .chat-area {
+        flex: 1;
+        /* Fill remaining vertical space */
+        min-height: 0;
+        /* Crucial for scrolling within flex item */
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .join-room-container {
+        flex-direction: column;
+    }
+
+    .join-room-container input,
+    .join-room-container button {
+        width: 100%;
+    }
+
+    button {
+        padding: 15px 20px;
+        font-size: 1.1rem;
+        /* Larger text for touch */
+    }
+
+    input {
+        padding: 15px;
+        font-size: 1.1rem;
+    }
+}

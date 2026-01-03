@@ -126,8 +126,8 @@ btnCopyCode.addEventListener('click', () => {
 btnShareRoom.addEventListener('click', () => {
     const shareUrl = `${window.location.origin}/?c=${currentRoomId}`;
     const shareData = {
-        title: 'Join my Math Challenge Room!',
-        text: `Play Math Challenge with me! Room Code: ${currentRoomId}`,
+        title: 'Join my Answer Room!',
+        text: `Play Answer with me! Room Code: ${currentRoomId}`,
         url: shareUrl
     };
 
@@ -135,7 +135,7 @@ btnShareRoom.addEventListener('click', () => {
         navigator.share(shareData);
     } else {
         // Fallback to copying full invite message
-        navigator.clipboard.writeText(`Join me in Math Challenge! ${shareUrl}`);
+        navigator.clipboard.writeText(`Join me in Answer! ${shareUrl}`);
         const originalIcon = btnShareRoom.innerHTML;
         btnShareRoom.innerHTML = '<i class="fa-solid fa-check"></i>';
         setTimeout(() => {
