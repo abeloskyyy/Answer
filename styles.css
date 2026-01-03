@@ -356,6 +356,7 @@ button:active {
     width: auto;
     padding: 0 30px;
     height: 100%;
+    background-color: var(--primary);
 }
 
 /* Scrollbar */
