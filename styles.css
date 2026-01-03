@@ -535,12 +535,24 @@ button:active {
     .chat-input input {
         width: auto;
         flex: 1;
+        min-width: 0;
+        /* Allow input to shrink if needed */
     }
 
     .chat-input button {
         padding: 0 20px;
-        font-size: 1rem;
+        /* Fluid padding */
+        width: auto;
+        /* Adaptable width */
+        height: 100%;
+        /* Match container height */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.2rem;
         background-color: var(--primary);
         color: white;
+        border-radius: 12px;
+        flex-shrink: 0;
     }
 }
