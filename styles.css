@@ -11,18 +11,26 @@
     --shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
+/* Global Reset & Sizing */
+* {
+    box-sizing: border-box;
+}
+
 body {
     font-family: 'Fredoka', sans-serif;
     background-color: var(--background);
     margin: 0;
+    padding: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
+    /* Fallback */
+    height: 100dvh;
+    /* Dynamic viewport height for mobile */
     color: var(--text);
     overflow: hidden;
     position: relative;
-    /* Context for background */
 }
 
 /* Math Background */
@@ -30,8 +38,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     z-index: -1;
     overflow: hidden;
     background-color: var(--background);
@@ -41,11 +49,9 @@ body {
 .math-symbol {
     position: absolute;
     color: rgba(45, 52, 54, 0.07);
-    /* Dark grey with very low opacity */
     user-select: none;
     font-weight: bold;
     font-family: 'Times New Roman', serif;
-    /* Classic math look */
     animation: floatUp linear infinite;
 }
 
@@ -69,16 +75,26 @@ body {
     }
 }
 
+/* Main Container */
 .container {
     width: 100%;
-    max-width: 800px;
+    max-width: 900px;
     padding: 20px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
+/* Screens */
 .screen {
     display: none;
     flex-direction: column;
     align-items: center;
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    /* Center content vertically by default */
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -98,40 +114,47 @@ body {
     }
 }
 
+/* Titles */
 .game-title {
-    font-size: 3rem;
+    font-size: 3.5rem;
     color: var(--primary);
-    text-shadow: 2px 2px 0px #a29bfe;
+    text-shadow: 3px 3px 0px #a29bfe;
     margin-bottom: 30px;
+    text-align: center;
+    line-height: 1.2;
 }
 
 .section-title {
     color: var(--secondary);
-    font-size: 2rem;
-    margin-bottom: 20px;
-}
-
-.card {
-    background: var(--card-bg);
-    padding: 30px;
-    border-radius: 20px;
-    box-shadow: var(--shadow);
-    width: 100%;
-    max-width: 400px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+    font-size: 2.5rem;
+    margin-bottom: 25px;
     text-align: center;
 }
 
+/* Cards (Login/Lobby) */
+.card {
+    background: var(--card-bg);
+    padding: 40px;
+    border-radius: 25px;
+    box-shadow: var(--shadow);
+    width: 100%;
+    max-width: 450px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+}
+
+/* Inputs & Buttons */
 input {
-    padding: 15px;
+    padding: 15px 20px;
     border: 2px solid #dfe6e9;
     border-radius: 12px;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-family: inherit;
     transition: border-color 0.2s;
     outline: none;
+    width: 100%;
 }
 
 input:focus {
@@ -139,19 +162,21 @@ input:focus {
 }
 
 button {
-    padding: 15px 30px;
+    padding: 15px 20px;
     border: none;
     border-radius: 12px;
     font-family: inherit;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.1s, box-shadow 0.1s;
     color: white;
+    width: 100%;
+    /* Full width by default */
 }
 
 button:active {
-    transform: scale(0.95);
+    transform: scale(0.98);
 }
 
 .btn-primary {
@@ -182,29 +207,36 @@ button:active {
 .divider {
     color: #b2bec3;
     font-weight: 600;
-    margin: 10px 0;
+    margin: 5px 0;
 }
 
 .join-room-container {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    /* Stack by default for safety */
+    gap: 15px;
 }
 
-.join-room-container input {
-    flex: 1;
+/* Room Section Specifics */
+#room-section {
+    justify-content: flex-start;
+    /* Align to top */
+    padding-top: 20px;
 }
 
-/* Room Styles */
 .room-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    margin-bottom: 15px;
     background: white;
     padding: 15px 20px;
     border-radius: 15px;
     box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    /* Allow wrapping */
+    gap: 15px;
 }
 
 .room-info {
@@ -213,47 +245,75 @@ button:active {
     gap: 15px;
 }
 
+.room-info h3 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
 .room-actions {
     display: flex;
-    gap: 5px;
+    gap: 10px;
 }
 
 .btn-icon {
-    padding: 8px 12px;
-    font-size: 1rem;
-    background-color: #dfe6e9;
-    color: var(--text);
-    box-shadow: 0 2px 0 #b2bec3;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.btn-icon:active {
-    box-shadow: 0 0 0 #b2bec3;
-    transform: translateY(2px);
+    font-size: 1.2rem;
+    background-color: #dfe6e9;
+    color: var(--text);
+    box-shadow: 0 3px 0 #b2bec3;
 }
 
 .game-area {
     display: flex;
     gap: 20px;
     width: 100%;
-    height: 60vh;
+    flex: 1;
+    /* Take remaining height */
+    min-height: 0;
+    /* Important for scroll */
+    padding-bottom: 20px;
 }
 
 .sidebar {
-    width: 200px;
+    width: 250px;
     background: white;
-    padding: 15px;
+    padding: 20px;
     border-radius: 15px;
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar h4 {
+    margin-top: 0;
+    color: var(--secondary);
+    margin-bottom: 15px;
+}
+
+#player-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+}
+
+#player-list li {
+    padding: 8px 10px;
+    background: #f5f6fa;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    font-weight: 600;
 }
 
 .chat-area {
     flex: 1;
     background: white;
-    padding: 15px;
+    padding: 20px;
     border-radius: 15px;
     box-shadow: var(--shadow);
     display: flex;
@@ -263,33 +323,45 @@ button:active {
 .messages {
     flex: 1;
     overflow-y: auto;
-    border: 1px solid #f1f1f1;
-    border-radius: 10px;
-    padding: 10px;
-    margin-bottom: 10px;
-    background: #fdfdfd;
+    border: 2px solid #f1f1f1;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: #fff;
+    font-size: 1rem;
+    overflow-x: hidden;
+    /* Prevent horizontal scroll */
+}
+
+/* Ensure messages break if too long */
+.messages div {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 .chat-input {
     display: flex;
     gap: 10px;
+    height: 50px;
 }
 
 .chat-input input {
     flex: 1;
-    padding: 10px;
+    height: 100%;
 }
 
-.btn-small {
-    padding: 10px 20px;
-    background-color: var(--primary);
-    color: white;
-    border-radius: 10px;
+.chat-input button {
+    width: auto;
+    padding: 0 30px;
+    height: 100%;
 }
 
-/* Scrollbar adjustment */
+/* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -301,114 +373,174 @@ button:active {
     border-radius: 4px;
 }
 
+
+/* =========================================
+   MOBILE RESPONSIVENESS (Max Width 768px)
+========================================= */
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
     .container {
-        padding: 5px;
-        height: 100vh;
+        padding: 20px;
+        height: 100dvh;
+        /* Force full mobile viewport height */
         display: flex;
         flex-direction: column;
+        justify-content: flex-start;
+        /* Start from top, don't center vertically */
+    }
+
+    /* Make screens take full height to manage their own layout */
+    .screen {
+        height: 100%;
+        width: 100%;
+        display: none;
+        /* Default hidden */
+        flex-direction: column;
+    }
+
+    .screen.active {
+        display: flex;
+    }
+
+    /* Center Login and Lobby vertically within their full-height screen */
+    #login-section,
+    #lobby-section {
         justify-content: center;
+    }
+
+    #room-section {
+        justify-content: flex-start;
+        /* Room starts at top to stretch chat */
+        padding-top: 0;
+        /* Remove extra padding since container has it */
     }
 
     .game-title {
         font-size: 2.5rem;
         margin-bottom: 20px;
+        flex-shrink: 0;
     }
 
-    /* Stack room header elements vertically */
+    .card {
+        padding: 30px;
+        width: 100%;
+        flex-shrink: 0;
+    }
+
+    /* Room Header: Stack everything */
     .room-header {
         flex-direction: column;
-        gap: 15px;
         align-items: stretch;
-        text-align: center;
         padding: 15px;
+        gap: 15px;
+        flex-shrink: 0;
+        margin-bottom: 15px;
     }
 
     .room-info {
         flex-direction: column;
-        gap: 10px;
         width: 100%;
+        justify-content: center;
+        gap: 10px;
     }
 
     .room-actions {
-        justify-content: center;
         width: 100%;
         gap: 15px;
     }
 
-    .btn-icon {
-        padding: 12px;
-        font-size: 1.2rem;
+    .room-actions .btn-icon {
         flex: 1;
+        height: 50px;
     }
 
-    /* Stack game area: Player list on top (collapsible/small), Chat below */
+    #btn-leave-room {
+        width: 100%;
+        padding: 15px;
+    }
+
+    /* Game Area: Fill remaining space */
     .game-area {
         flex-direction: column;
+        gap: 15px;
+        padding-bottom: 0;
+        /* Container padding handles bottom */
         height: auto;
         flex: 1;
-        /* Take remaining space */
+        /* GROW to fill all empty space */
         min-height: 0;
-        /* Allow shrinking */
-        gap: 10px;
     }
 
+    /* Sidebar becomes a top bar for players */
     .sidebar {
         width: 100%;
         height: auto;
-        max-height: 120px;
-        padding: 10px;
-        display: flex;
-        flex-direction: column;
+        min-height: auto;
+        padding: 15px;
+        flex-direction: row;
+        align-items: center;
+        gap: 15px;
+        flex-shrink: 0;
+        order: 1;
     }
 
     .sidebar h4 {
-        margin: 0 0 5px 0;
+        margin: 0;
+        white-space: nowrap;
     }
 
     #player-list {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: row;
+        overflow-x: auto;
         gap: 10px;
-        padding: 0;
-        margin: 0;
-        list-style: none;
+        padding-bottom: 5px;
+        width: 100%;
     }
 
     #player-list li {
-        background: #f1f1f1;
-        padding: 5px 10px;
-        border-radius: 15px;
-        font-size: 0.9rem;
+        margin: 0;
+        white-space: nowrap;
+        font-size: 0.95rem;
+        padding: 8px 15px;
     }
 
+    /* Chat Area: Fills whatever is left */
     .chat-area {
-        flex: 1;
-        /* Fill remaining vertical space */
-        min-height: 0;
-        /* Crucial for scrolling within flex item */
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .join-room-container {
-        flex-direction: column;
-    }
-
-    .join-room-container input,
-    .join-room-container button {
-        width: 100%;
-    }
-
-    button {
-        padding: 15px 20px;
-        font-size: 1.1rem;
-        /* Larger text for touch */
-    }
-
-    input {
         padding: 15px;
-        font-size: 1.1rem;
+        flex: 1;
+        /* Critical: Fill remaining vertical space */
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        order: 2;
+        width: 100%;
+    }
+
+    .messages {
+        padding: 15px;
+        font-size: 1rem;
+        flex: 1;
+        /* Stretch to fill chat area */
+        overflow-y: auto;
+        min-height: 0;
+    }
+
+    .chat-input {
+        gap: 12px;
+        flex-shrink: 0;
+        margin-top: 15px;
+    }
+
+    .chat-input input {
+        width: auto;
+        flex: 1;
+    }
+
+    .chat-input button {
+        padding: 0 20px;
+        font-size: 1rem;
+        background-color: var(--primary);
+        color: white;
     }
 }
