@@ -1,0 +1,302 @@
+:root {
+    --primary: #6C5CE7;
+    --primary-dark: #5849be;
+    --secondary: #00B894;
+    --secondary-dark: #008f72;
+    --danger: #FF7675;
+    --danger-dark: #d63d3c;
+    --background: #DFE6E9;
+    --card-bg: #FFFFFF;
+    --text: #2D3436;
+    --shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: 'Fredoka', sans-serif;
+    background-color: var(--background);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: var(--text);
+    overflow: hidden;
+    position: relative;
+    /* Context for background */
+}
+
+/* Math Background */
+#math-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+    background-color: var(--background);
+    pointer-events: none;
+}
+
+.math-symbol {
+    position: absolute;
+    color: rgba(45, 52, 54, 0.07);
+    /* Dark grey with very low opacity */
+    user-select: none;
+    font-weight: bold;
+    font-family: 'Times New Roman', serif;
+    /* Classic math look */
+    animation: floatUp linear infinite;
+}
+
+@keyframes floatUp {
+    0% {
+        transform: translateY(110vh) rotate(0deg);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(-10vh) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+    padding: 20px;
+}
+
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.screen.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.game-title {
+    font-size: 3rem;
+    color: var(--primary);
+    text-shadow: 2px 2px 0px #a29bfe;
+    margin-bottom: 30px;
+}
+
+.section-title {
+    color: var(--secondary);
+    font-size: 2rem;
+    margin-bottom: 20px;
+}
+
+.card {
+    background: var(--card-bg);
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+}
+
+input {
+    padding: 15px;
+    border: 2px solid #dfe6e9;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    outline: none;
+}
+
+input:focus {
+    border-color: var(--primary);
+}
+
+button {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    color: white;
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    box-shadow: 0 4px 0 var(--primary-dark);
+}
+
+.btn-primary:active {
+    box-shadow: 0 0 0 var(--primary-dark);
+    transform: translateY(4px);
+}
+
+.btn-secondary {
+    background-color: var(--secondary);
+    box-shadow: 0 4px 0 var(--secondary-dark);
+}
+
+.btn-secondary:active {
+    box-shadow: 0 0 0 var(--secondary-dark);
+    transform: translateY(4px);
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    box-shadow: 0 4px 0 var(--danger-dark);
+}
+
+.divider {
+    color: #b2bec3;
+    font-weight: 600;
+    margin: 10px 0;
+}
+
+.join-room-container {
+    display: flex;
+    gap: 10px;
+}
+
+.join-room-container input {
+    flex: 1;
+}
+
+/* Room Styles */
+.room-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 15px;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+}
+
+.room-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.room-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-icon {
+    padding: 8px 12px;
+    font-size: 1rem;
+    background-color: #dfe6e9;
+    color: var(--text);
+    box-shadow: 0 2px 0 #b2bec3;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:active {
+    box-shadow: 0 0 0 #b2bec3;
+    transform: translateY(2px);
+}
+
+.game-area {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+    height: 60vh;
+}
+
+.sidebar {
+    width: 200px;
+    background: white;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+}
+
+.chat-area {
+    flex: 1;
+    background: white;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.messages {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #f1f1f1;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #fdfdfd;
+}
+
+.chat-input {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 10px;
+}
+
+.btn-small {
+    padding: 10px 20px;
+    background-color: var(--primary);
+    color: white;
+    border-radius: 10px;
+}
+
+/* Scrollbar adjustment */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}

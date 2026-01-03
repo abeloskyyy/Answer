@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Answer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div id="math-background"></div>
+    <div class="container">
+        <!-- Login Section -->
+        <div id="login-section" class="screen active">
+            <h1 class="game-title">Answer</h1>
+            <div class="card">
+                <input type="text" id="username" placeholder="Enter your nickname" maxlength="12">
+                <button id="btn-login" class="btn-primary">Play</button>
+            </div>
+        </div>
+
+        <!-- Lobby Section -->
+        <div id="lobby-section" class="screen">
+            <h2 class="section-title">Lobby</h2>
+            <div class="card">
+                <button id="btn-create-room" class="btn-secondary">Create Room</button>
+                <div class="divider">OR</div>
+                <div class="join-room-container">
+                    <input type="text" id="room-code-input" placeholder="Room Code">
+                    <button id="btn-join-room" class="btn-primary">Join</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Section -->
+        <div id="room-section" class="screen">
+            <div class="room-header">
+                <div class="room-info">
+                    <h3>Room: <span id="current-room-code">XXXX</span></h3>
+                    <div class="room-actions">
+                        <button id="btn-copy-code" class="btn-icon" title="Copy Code"><i
+                                class="fa-solid fa-copy"></i></button>
+                        <button id="btn-share-room" class="btn-icon" title="Share Room"><i
+                                class="fa-solid fa-share-nodes"></i></button>
+                    </div>
+                </div>
+                <button id="btn-leave-room" class="btn-danger">Exit</button>
+            </div>
+
+            <div class="game-area">
+                <div class="sidebar">
+                    <h4>Players</h4>
+                    <ul id="player-list">
+                        <!-- Players go here -->
+                    </ul>
+                </div>
+                <div class="chat-area">
+                    <div id="chat-messages" class="messages"></div>
+                    <div class="chat-input local-server-adjustment">
+                        <input type="text" id="chat-input" placeholder="Type a message...">
+                        <button id="btn-send-chat" class="btn-small">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="scripts.js"></script>
+</body>
+
+</html>
