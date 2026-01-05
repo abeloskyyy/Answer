@@ -63,18 +63,54 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            room.users.push({ id: socket.id, name: username, avatar: avatar || 'avatar_1.png', score: 0 });
-            socket.join(roomId);
-            socket.emit('room_joined', roomId);
+            // Check if this is a reconnection (user with same name exists)
+            const existingUser = room.users.find(u => u.name === username);
 
-            // Send current settings to new joiner
-            socket.emit('update_settings', room.settings);
-            socket.emit('host_status', false); // Joiner is not host
+            if (existingUser && existingUser.disconnected) {
+                // This is a reconnection!
+                console.log(`User reconnecting to room ${roomId}: ${username} (old: ${existingUser.id}, new: ${socket.id})`);
 
-            io.to(roomId).emit('update_users', room.users);
-            io.to(roomId).emit('update_users', room.users);
-            io.to(roomId).emit('receive_message', { user: 'System', text: `${username} joined the room.` });
-            console.log(`User joined room ${roomId}: ${username} (${socket.id})`);
+                // Cancel the disconnect timeout
+                if (existingUser.disconnectTimeout) {
+                    clearTimeout(existingUser.disconnectTimeout);
+                }
+
+                // Update the socket ID and clear disconnect flags
+                existingUser.id = socket.id;
+                existingUser.disconnected = false;
+                delete existingUser.disconnectTime;
+                delete existingUser.disconnectTimeout;
+
+                socket.join(roomId);
+                socket.emit('room_joined', roomId);
+                socket.emit('update_settings', room.settings);
+                socket.emit('host_status', room.host === socket.id);
+
+                io.to(roomId).emit('update_users', room.users);
+                io.to(roomId).emit('receive_message', { user: 'System', text: `${username} reconnected.` });
+                console.log(`User successfully reconnected: ${username} (${socket.id})`);
+            } else {
+                // Check room size limit
+                const MAX_ROOM_SIZE = 2;
+                if (room.users.length >= MAX_ROOM_SIZE) {
+                    socket.emit('error', `Room is full! Maximum ${MAX_ROOM_SIZE} players allowed.`);
+                    return;
+                }
+
+                // New user joining
+                room.users.push({ id: socket.id, name: username, avatar: avatar || 'avatar_1.png', score: 0 });
+                socket.join(roomId);
+                socket.emit('room_joined', roomId);
+
+                // Send current settings to new joiner
+                socket.emit('update_settings', room.settings);
+                socket.emit('host_status', false); // Joiner is not host
+
+                io.to(roomId).emit('update_users', room.users);
+                io.to(roomId).emit('update_users', room.users);
+                io.to(roomId).emit('receive_message', { user: 'System', text: `${username} joined the room.` });
+                console.log(`User joined room ${roomId}: ${username} (${socket.id})`);
+            }
         } else {
             socket.emit('error', 'Room not found!');
         }
@@ -338,27 +374,47 @@ io.on('connection', (socket) => {
 
     // Disconnect
     socket.on('disconnect', () => {
-        // console.log('User disconnected:', socket.id); // Replaced below
+        // Grace period for reconnection (useful for mobile app switching)
+        const DISCONNECT_GRACE_PERIOD = 40000; // 40 seconds
+
         for (const roomId in rooms) {
             const room = rooms[roomId];
             const userIndex = room.users.findIndex(u => u.id === socket.id);
 
             if (userIndex !== -1) {
                 const user = room.users[userIndex];
-                room.users.splice(userIndex, 1);
-                io.to(roomId).emit('update_users', room.users);
-                io.to(roomId).emit('receive_message', { user: 'System', text: `${user.name} left the room.` });
-                console.log(`User disconnected from room ${roomId}: ${user.name} (${socket.id})`);
+                console.log(`User disconnected from room ${roomId}: ${user.name} (${socket.id}) - Grace period active`);
 
-                // If host leaves, assign new host or delete room
-                if (room.users.length === 0) {
-                    delete rooms[roomId];
-                    console.log(`Room deleted: ${roomId}`);
-                } else if (room.host === socket.id) {
-                    room.host = room.users[0].id; // Assign new host
-                    io.to(room.host).emit('host_status', true);
-                    io.to(roomId).emit('receive_message', { user: 'System', text: `${room.users[0].name} is now the host.` });
-                }
+                // Mark user as disconnected but don't remove yet
+                user.disconnected = true;
+                user.disconnectTime = Date.now();
+
+                // Set timeout to remove user if they don't reconnect
+                user.disconnectTimeout = setTimeout(() => {
+                    // Check if user is still disconnected
+                    const currentUser = room.users.find(u => u.id === socket.id);
+                    if (currentUser && currentUser.disconnected) {
+                        // User didn't reconnect, remove them
+                        const idx = room.users.findIndex(u => u.id === socket.id);
+                        if (idx !== -1) {
+                            room.users.splice(idx, 1);
+                            io.to(roomId).emit('update_users', room.users);
+                            io.to(roomId).emit('receive_message', { user: 'System', text: `${user.name} left the room.` });
+                            console.log(`User removed after grace period: ${user.name} (${socket.id})`);
+
+                            // If host leaves, assign new host or delete room
+                            if (room.users.length === 0) {
+                                delete rooms[roomId];
+                                console.log(`Room deleted: ${roomId}`);
+                            } else if (room.host === socket.id) {
+                                room.host = room.users[0].id; // Assign new host
+                                io.to(room.host).emit('host_status', true);
+                                io.to(roomId).emit('receive_message', { user: 'System', text: `${room.users[0].name} is now the host.` });
+                            }
+                        }
+                    }
+                }, DISCONNECT_GRACE_PERIOD);
+
                 break;
             }
         }

@@ -1381,6 +1381,19 @@ select:focus {
     animation: bounce 1s infinite;
 }
 
+.winner-section.is-tie {
+    background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+}
+
+.winner-section.is-tie i {
+    color: #6c5ce7;
+    animation: none;
+}
+
+.winner-section.no-winner i {
+    color: var(--danger);
+}
+
 .winner-section #result-winner-name {
     font-size: 1.5rem;
     font-weight: 800;
@@ -1426,7 +1439,7 @@ select:focus {
 
 .ranking-row {
     display: grid;
-    grid-template-columns: 35px 1fr auto auto auto;
+    grid-template-columns: 35px 1fr auto;
     align-items: center;
     gap: 8px;
     padding: 10px;
@@ -1436,6 +1449,41 @@ select:focus {
     border-left: 4px solid transparent;
     transition: all 0.2s;
     animation: slideInRight 0.4s ease-out backwards;
+}
+
+.player-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.player-name {
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-details {
+    display: flex;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #636e72;
+}
+
+.player-answer {
+    font-family: 'Courier New', monospace;
+    background: #dfe6e9;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.answer-diff {
+    white-space: nowrap;
 }
 
 .ranking-row:nth-child(1) {
@@ -1492,36 +1540,13 @@ select:focus {
     color: #f39c12;
 }
 
-.ranking-row .player-name {
-    font-size: 1rem;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ranking-row .player-answer {
-    font-family: 'Courier New', monospace;
-    background: #dfe6e9;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text);
-}
-
-.ranking-row .answer-diff {
-    font-size: 0.85rem;
-    color: #636e72;
-    white-space: nowrap;
-}
-
 .ranking-row .points-earned {
     font-size: 1rem;
     font-weight: 800;
     color: #27ae60;
     text-align: right;
     min-width: 60px;
+    white-space: nowrap;
 }
 
 .next-round-timer {
@@ -1601,13 +1626,22 @@ select:focus {
         font-size: 1rem;
     }
 
-    .ranking-row .player-name {
+    .player-name {
         font-size: 0.9rem;
     }
 
-    .ranking-row .answer-diff,
-    .ranking-row .player-answer {
-        display: none;
+    .player-details {
+        font-size: 0.8rem;
+        gap: 6px;
+    }
+
+    .player-answer {
+        padding: 2px 6px;
+        font-size: 0.8rem;
+    }
+
+    .answer-diff {
+        font-size: 0.75rem;
     }
 
     .ranking-row .points-earned {
@@ -1710,7 +1744,7 @@ select:focus {
 .podium-title {
     color: #fdcb6e;
     font-size: 3rem;
-    margin-bottom: 20px;
+    margin-bottom: 120px;
     margin-top: 0;
     text-shadow: 0 0 10px rgba(253, 203, 110, 0.5);
     animation: slideInDown 0.8s ease-out;
@@ -1747,8 +1781,8 @@ select:focus {
 }
 
 .podium-avatar {
-    width: 50px;
-    height: 50px;
+    width: 90px;
+    height: 90px;
     background: #ecf0f1;
     border-radius: 50%;
     display: flex;
@@ -1757,7 +1791,7 @@ select:focus {
     font-size: 1.5rem;
     color: #2d3436;
     margin-bottom: 10px;
-    border: 3px solid white;
+    border: 6px solid white;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     opacity: 0;
     animation: fadeIn 0.5s ease-out forwards;
@@ -1765,8 +1799,8 @@ select:focus {
 
 .first .podium-avatar {
     animation-delay: 1.5s;
-    width: 60px;
-    height: 60px;
+    width: 120px;
+    height: 120px;
     font-size: 2rem;
     border-color: #fdcb6e;
 }
@@ -1893,7 +1927,7 @@ select:focus {
 
     .podium-title {
         font-size: 2rem;
-        margin-bottom: 15px;
+        margin-bottom: 75px;
         margin-top: 0;
     }
 
@@ -1904,15 +1938,15 @@ select:focus {
     }
 
     .podium-avatar {
-        width: 40px;
-        height: 40px;
+        width: 70px;
+        height: 70px;
         font-size: 1.2rem;
         margin-bottom: 8px;
     }
 
     .first .podium-avatar {
-        width: 50px;
-        height: 50px;
+        width: 85px;
+        height: 85px;
         font-size: 1.5rem;
     }
 
@@ -1946,8 +1980,8 @@ select:focus {
     }
 
     .crown-icon {
-        top: -30px;
-        font-size: 2rem;
+        top: -20px;
+        font-size: 1.6rem;
     }
 
     .podium-actions {

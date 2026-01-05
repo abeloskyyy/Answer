@@ -1,5 +1,89 @@
 const socket = io();
 
+// Reconnection handling for mobile app switching
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+socket.on('disconnect', (reason) => {
+    console.log('Socket disconnected:', reason);
+
+    // Don't try to reconnect if it was intentional
+    if (reason === 'io client disconnect') {
+        return;
+    }
+
+    // Show reconnecting message if in a room
+    if (currentRoomId) {
+        showReconnectingMessage();
+    }
+});
+
+socket.on('connect', () => {
+    console.log('Socket connected');
+    reconnectAttempts = 0;
+    hideReconnectingMessage();
+
+    // If we were in a room, try to rejoin
+    if (currentRoomId && myUsername) {
+        console.log('Attempting to rejoin room:', currentRoomId);
+        socket.emit('join_room', {
+            username: myUsername,
+            roomId: currentRoomId,
+            avatar: myAvatar
+        });
+    }
+});
+
+socket.on('reconnect_attempt', (attemptNumber) => {
+    reconnectAttempts = attemptNumber;
+    console.log(`Reconnection attempt ${attemptNumber}/${MAX_RECONNECT_ATTEMPTS}`);
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        showModal(
+            'Connection Lost',
+            'Unable to reconnect to the server. Please refresh the page.',
+            () => location.reload()
+        );
+    }
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+});
+
+// Reconnecting message UI
+function showReconnectingMessage() {
+    let reconnectMsg = document.getElementById('reconnect-message');
+    if (!reconnectMsg) {
+        reconnectMsg = document.createElement('div');
+        reconnectMsg.id = 'reconnect-message';
+        reconnectMsg.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f39c12;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: slideDown 0.3s ease-out;
+        `;
+        reconnectMsg.innerHTML = '<i class="fas fa-sync fa-spin"></i> Reconnecting...';
+        document.body.appendChild(reconnectMsg);
+    }
+    reconnectMsg.style.display = 'block';
+}
+
+function hideReconnectingMessage() {
+    const reconnectMsg = document.getElementById('reconnect-message');
+    if (reconnectMsg) {
+        reconnectMsg.style.display = 'none';
+    }
+}
+
 // Background Animation
 function createMathBackground() {
     const bgContainer = document.getElementById('math-background');
@@ -290,10 +374,10 @@ btnCopyCode.addEventListener('click', () => {
 
 btnShareRoom.addEventListener('click', () => {
     const shareUrl = `${window.location.origin}/?c=${currentRoomId}`;
-    const shareData = { title: 'Join Root Rush!', text: `Play Root Rush with me! Code: ${currentRoomId}`, url: shareUrl };
+    const shareData = { title: 'Join Answer!', text: `Play Answer with me! Code: ${currentRoomId}`, url: shareUrl };
     if (navigator.share) navigator.share(shareData);
     else {
-        navigator.clipboard.writeText(`Join me in Root Rush! ${shareUrl}`);
+        navigator.clipboard.writeText(`Join me in Answer! ${shareUrl}`);
         const originalIcon = btnShareRoom.innerHTML;
         btnShareRoom.innerHTML = '<i class="fa-solid fa-check"></i>';
         setTimeout(() => btnShareRoom.innerHTML = originalIcon, 1500);
@@ -683,17 +767,49 @@ socket.on('round_result', (data) => {
     // Set correct answer
     correctAnswerEl.innerText = data.correctAnswer.toLocaleString();
 
-    // Set winner
+    // Find my result
+    const myResult = data.rankings.find(r => r.id === socket.id);
+    const myRank = data.rankings.indexOf(myResult);
+    const isWinner = myRank === 0 && myResult && myResult.answer !== null;
+    const isTie = data.rankings.length > 1 &&
+        data.rankings[0].diff === data.rankings[1].diff &&
+        data.rankings[0].diff !== Infinity;
+
+    // Set winner section based on my result
+    const winnerIcon = winnerSection.querySelector('i');
+    const winnerLabel = winnerSection.querySelector('.winner-label');
+
     if (data.winner === "No one") {
         winnerSection.classList.add('no-winner');
+        winnerSection.classList.remove('is-tie');
         winnerNameEl.innerText = "No one answered in time!";
-        winnerSection.querySelector('.winner-label').style.display = 'none';
-        winnerSection.querySelector('i').style.display = 'none';
-    } else {
+        winnerLabel.style.display = 'none';
+        winnerIcon.style.display = 'none';
+    } else if (isTie) {
+        // Empate
         winnerSection.classList.remove('no-winner');
-        winnerNameEl.innerText = data.winner;
-        winnerSection.querySelector('.winner-label').style.display = 'inline';
-        winnerSection.querySelector('i').style.display = 'block';
+        winnerSection.classList.add('is-tie');
+        winnerIcon.className = 'fa-solid fa-handshake';
+        winnerIcon.style.display = 'block';
+        winnerNameEl.innerText = "It's a tie!";
+        winnerLabel.innerText = "Multiple players had the same difference";
+        winnerLabel.style.display = 'inline';
+    } else if (isWinner) {
+        // Yo gané
+        winnerSection.classList.remove('no-winner', 'is-tie');
+        winnerIcon.className = 'fa-solid fa-trophy';
+        winnerIcon.style.display = 'block';
+        winnerNameEl.innerText = "You won this round!";
+        winnerLabel.innerText = "You were the closest!";
+        winnerLabel.style.display = 'inline';
+    } else {
+        // Otro ganó
+        winnerSection.classList.remove('no-winner', 'is-tie');
+        winnerIcon.className = 'fa-solid fa-times-circle';
+        winnerIcon.style.display = 'block';
+        winnerNameEl.innerText = `${data.winner} won`;
+        winnerLabel.innerText = "was the closest";
+        winnerLabel.style.display = 'inline';
     }
 
     // Build rankings list
@@ -712,26 +828,35 @@ socket.on('round_result', (data) => {
             rankNum.className = 'rank-number';
             rankNum.innerText = `#${index + 1}`;
 
+            const playerInfo = document.createElement('div');
+            playerInfo.className = 'player-info';
+
             const playerName = document.createElement('div');
             playerName.className = 'player-name';
             playerName.innerText = r.name + (isMe ? ' (You)' : '');
 
-            const answer = document.createElement('div');
+            const playerDetails = document.createElement('div');
+            playerDetails.className = 'player-details';
+
+            const answer = document.createElement('span');
             answer.className = 'player-answer';
             answer.innerText = r.answer !== null ? r.answer : '-';
 
-            const diff = document.createElement('div');
+            const diff = document.createElement('span');
             diff.className = 'answer-diff';
             diff.innerText = (r.diff !== null && r.diff !== undefined && r.diff !== Infinity) ? `±${r.diff}` : '-';
+
+            playerDetails.appendChild(answer);
+            playerDetails.appendChild(diff);
+            playerInfo.appendChild(playerName);
+            playerInfo.appendChild(playerDetails);
 
             const points = document.createElement('div');
             points.className = 'points-earned';
             points.innerText = r.awarded ? `+${r.awarded}` : '0';
 
             row.appendChild(rankNum);
-            row.appendChild(playerName);
-            row.appendChild(answer);
-            row.appendChild(diff);
+            row.appendChild(playerInfo);
             row.appendChild(points);
 
             rankingsList.appendChild(row);
