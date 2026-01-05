@@ -699,6 +699,22 @@ function updateLobbyUI(settings) {
             hostControls.style.display = 'block';
             guestControls.style.display = 'none';
             btnBackMode.style.display = 'block';
+
+            // MODE-SPECIFIC CONFIGURATION UI (HOST)
+            const diffSelect = document.getElementById('difficulty-input');
+            const modeTitle = document.querySelector('#configuration-view h2');
+
+            if (settings.gameMode === 'prime_master') {
+                modeTitle.innerText = "Configure Prime Master";
+                diffSelect.options[0].text = "Easy (10-99)";
+                diffSelect.options[1].text = "Normal (100-500)";
+                diffSelect.options[2].text = "Hard (200-999)";
+            } else {
+                modeTitle.innerText = "Configure Root Rush";
+                diffSelect.options[0].text = "Easy (100-1k)";
+                diffSelect.options[1].text = "Normal (10k-1M)";
+                diffSelect.options[2].text = "Hard (1M-100M)";
+            }
         } else {
             hostControls.style.display = 'none';
             guestControls.style.display = 'block';
@@ -707,17 +723,31 @@ function updateLobbyUI(settings) {
             // Update Guest Preview Values
             pRounds.innerText = `${settings.rounds} Rounds`;
             pTime.innerText = `${settings.timePerRound}s`;
-            pDifficulty.innerText = settings.difficulty.charAt(0).toUpperCase() + settings.difficulty.slice(1);
+
+            let diffText = settings.difficulty.charAt(0).toUpperCase() + settings.difficulty.slice(1);
+            if (settings.gameMode === 'prime_master') {
+                if (settings.difficulty === 'easy') diffText += " (10-99)";
+                if (settings.difficulty === 'normal') diffText += " (100-500)";
+                if (settings.difficulty === 'hard') diffText += " (200-999)";
+            } else {
+                if (settings.difficulty === 'easy') diffText += " (100-1k)";
+                if (settings.difficulty === 'normal') diffText += " (10k-1M)";
+                if (settings.difficulty === 'hard') diffText += " (1M-100M)";
+            }
+            pDifficulty.innerText = diffText;
         }
     }
 }
 
 // Host selects a mode
 document.getElementById('mode-card-root-rush').addEventListener('click', () => {
-    console.log("Mode card clicked. isHost:", isHost);
     if (!isHost) return;
-    const settings = { gameMode: 'root_rush' };
-    socket.emit('update_settings', { roomId: currentRoomId, settings });
+    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'answer' } });
+});
+
+document.getElementById('mode-card-prime-master').addEventListener('click', () => {
+    if (!isHost) return;
+    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'prime_master' } });
 });
 
 // Host goes back
@@ -913,9 +943,25 @@ socket.on('game_started', () => {
     // Play countdown SFX
     playSFX(sfxCount);
 
-    // Hide math expression initially (prevent showing radical without number)
+    // Hide both question types during countdown
     const mathExp = document.querySelector('.math-expression');
     if (mathExp) mathExp.style.visibility = 'hidden';
+
+    const optionsArea = document.getElementById('options-area');
+    if (optionsArea) optionsArea.style.display = 'none';
+
+    // Reset Answer Input UI
+    const inputContainer = document.querySelector('.input-container');
+    if (inputContainer) inputContainer.style.display = 'flex';
+    gameInput.value = '';
+    gameInput.disabled = false;
+    btnSubmitAnswer.disabled = false;
+
+    // Reset Options UI
+    if (optionsArea) {
+        optionsArea.classList.remove('disabled');
+        optionsArea.innerHTML = ''; // Clear previous round options
+    }
 
     // Ensure Game Over overlay is closed
     const gameOverOverlay = document.getElementById('game-over-overlay');
@@ -977,16 +1023,77 @@ socket.on('new_round', (data) => {
     }, 600);
 
     // 1. Update info
+    // 2. Show correct UI based on mode
+    const mathExp = document.querySelector('.math-expression');
+    const inputContainer = document.querySelector('.input-container');
+
+    if (currentSettings.gameMode === 'prime_master') {
+        const optionsArea = document.getElementById('options-area');
+        optionsArea.style.display = 'grid';
+        optionsArea.innerHTML = ''; // Reset
+        optionsArea.classList.remove('disabled'); // Ensure interactivity is restored
+
+        // Hide waiting overlay
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (waitingOverlay) waitingOverlay.style.display = 'none';
+
+        // Hide standard math expression and numeric input
+        if (mathExp) mathExp.style.display = 'none';
+        if (inputContainer) inputContainer.style.display = 'none';
+        if (numericKeypad) numericKeypad.classList.remove('visible');
+
+        // Shuffle options for this player specifically
+        const rawOptions = data.options || [];
+        const shuffledOptions = [...rawOptions];
+        for (let i = shuffledOptions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+        }
+
+        shuffledOptions.forEach(val => {
+            const tile = document.createElement('div');
+            tile.className = 'option-tile';
+            tile.innerText = val;
+            tile.onclick = () => {
+                if (!optionsArea.classList.contains('disabled')) {
+                    // Visual feedback
+                    const allTiles = optionsArea.querySelectorAll('.option-tile');
+                    allTiles.forEach(t => t.classList.remove('selected'));
+                    tile.classList.add('selected');
+
+                    optionsArea.classList.add('disabled');
+                    socket.emit('submit_answer', { roomId: currentRoomId, answer: val });
+
+                    // Show waiting overlay
+                    const waitingOverlay = document.getElementById('waiting-overlay');
+                    if (waitingOverlay) waitingOverlay.style.display = 'flex';
+                }
+            };
+            optionsArea.appendChild(tile);
+        });
+    } else {
+        // Root Rush (Answer) mode
+        if (mathExp) {
+            mathExp.style.display = 'flex';
+            mathExp.style.visibility = 'visible';
+        }
+        if (inputContainer) inputContainer.style.display = 'flex';
+        const optionsArea = document.getElementById('options-area');
+        if (optionsArea) optionsArea.style.display = 'none';
+
+        // Restore keypad if mobile
+        if (isMobileDevice()) {
+            if (numericKeypad) numericKeypad.classList.add('visible');
+        }
+
+        questionNumber.parentElement.classList.remove('fade-in-up');
+        void questionNumber.offsetWidth; // Trigger reflow
+        questionNumber.innerText = data.question.toLocaleString(); // Format with commas
+    }
+
+    // Update Round Counter
     roundBadge.innerText = data.round;
     totalRoundsBadge.innerText = data.totalRounds;
-
-    // 2. Show question with animation
-    const mathExp = document.querySelector('.math-expression');
-    if (mathExp) mathExp.style.visibility = 'visible';
-
-    questionNumber.parentElement.classList.remove('fade-in-up');
-    void questionNumber.offsetWidth; // Trigger reflow
-    questionNumber.innerText = data.question.toLocaleString(); // Format with commas
     // questionNumber.parentElement.classList.add('fade-in-up'); // DISABLED per request for snappy load
 
     // 3. Reset Input
@@ -1079,10 +1186,11 @@ socket.on('round_result', (data) => {
     // Find my result
     const myResult = data.rankings.find(r => r.id === socket.id);
     const myRank = data.rankings.indexOf(myResult);
-    const isWinner = myRank === 0 && myResult && myResult.answer !== null;
-    const isTie = data.rankings.length > 1 &&
-        data.rankings[0].diff === data.rankings[1].diff &&
-        data.rankings[0].diff !== Infinity;
+
+    // Check if I am a winner (must have answered and be 1st or tied for 1st)
+    const isWinner = myResult && myResult.awarded > 0 && (myRank === 0 || (data.isTie && myResult.diff === data.rankings[0].diff && data.mode === 'answer') || (data.isTie && myResult.time === data.rankings[0].time && data.mode === 'prime_master'));
+
+    const isTie = !!data.isTie;
 
     // Set winner section based on my result
     const winnerIcon = winnerSection.querySelector('i');
@@ -1091,8 +1199,9 @@ socket.on('round_result', (data) => {
     if (data.winner === "No one") {
         winnerSection.classList.add('no-winner');
         winnerSection.classList.remove('is-tie');
-        winnerNameEl.innerText = "No one answered in time!";
-        winnerLabel.style.display = 'none';
+        winnerNameEl.innerText = "No one got it right!";
+        winnerLabel.innerText = "Try faster next time!";
+        winnerLabel.style.display = 'inline';
         winnerIcon.style.display = 'none';
     } else if (isTie) {
         // Empate
@@ -1101,7 +1210,7 @@ socket.on('round_result', (data) => {
         winnerIcon.className = 'fa-solid fa-handshake';
         winnerIcon.style.display = 'block';
         winnerNameEl.innerText = "It's a tie!";
-        winnerLabel.innerText = "Multiple players had the same difference";
+        winnerLabel.innerText = data.mode === 'prime_master' ? "Multiple players were just as fast!" : "Multiple players had the same difference";
         winnerLabel.style.display = 'inline';
     } else if (isWinner) {
         // Yo gané
@@ -1158,12 +1267,24 @@ socket.on('round_result', (data) => {
             answer.className = 'player-answer';
             answer.innerText = r.answer !== null ? r.answer : '-';
 
-            const diff = document.createElement('span');
-            diff.className = 'answer-diff';
-            diff.innerText = (r.diff !== null && r.diff !== undefined && r.diff !== Infinity) ? `±${r.diff}` : '-';
+            const extra = document.createElement('span');
+            extra.className = 'answer-diff';
+
+            if (data.mode === 'prime_master') {
+                // Show speed in seconds
+                if (r.time && r.time !== Infinity) {
+                    const speed = ((r.time - data.startTime) / 1000).toFixed(2);
+                    extra.innerText = `${speed}s`;
+                } else {
+                    extra.innerText = '-';
+                }
+            } else {
+                // Show difference
+                extra.innerText = (r.diff !== null && r.diff !== undefined && r.diff !== Infinity) ? `±${r.diff}` : '-';
+            }
 
             playerDetails.appendChild(answer);
-            playerDetails.appendChild(diff);
+            playerDetails.appendChild(extra);
             playerInfo.appendChild(playerName);
             playerInfo.appendChild(playerDetails);
 

@@ -8,6 +8,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Load Game Modes
+const gameModes = {
+    'answer': require('./gamemodes/Answer'),
+    'prime_master': require('./gamemodes/PrimeMaster')
+};
+
 // Serve static files from current directory
 app.use(express.static(__dirname));
 
@@ -109,7 +115,7 @@ io.on('connection', (socket) => {
                 console.log(`User successfully reconnected: ${username} (${socket.id})`);
             } else {
                 // Check room size limit
-                const MAX_ROOM_SIZE = 2;
+                const MAX_ROOM_SIZE = 20;
                 if (room.users.length >= MAX_ROOM_SIZE) {
                     socket.emit('error', `Room is full! Maximum ${MAX_ROOM_SIZE} players allowed.`);
                     return;
@@ -153,11 +159,6 @@ io.on('connection', (socket) => {
     });
 
     // Game Logic Helpers
-    // Load Game Modes
-    const gameModes = {
-        'answer': require('./gamemodes/Answer')
-    };
-
     // Helper to get current game mode logic
     function getGameMode(room) {
         // Use the gameMode from settings, default to 'answer' if not set or invalid
@@ -183,7 +184,10 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('round_result', {
             winner: resultsData.winner,
             correctAnswer: resultsData.correctAnswer,
-            rankings: resultsData.rankings
+            rankings: resultsData.rankings,
+            isTie: resultsData.isTie,
+            mode: resultsData.mode,
+            startTime: room.roundStartTime
         });
 
         io.to(roomId).emit('update_users', room.users);
@@ -211,6 +215,7 @@ io.on('connection', (socket) => {
 
         room.question = qData;
         room.roundAnswers = {}; // Reset answers
+        room.roundStartTime = Date.now(); // Record start time for speed calculation
 
         // console.log(`Room ${roomId} Round ${room.currentRound}: Question generated`);
 
@@ -218,8 +223,9 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('new_round', {
             round: room.currentRound,
             totalRounds: room.settings.rounds,
-            question: qData.question,
-            time: room.settings.timePerRound
+            time: room.settings.timePerRound,
+            startTime: room.roundStartTime,
+            ...qData
         });
 
         // Start Server Timer
@@ -270,8 +276,11 @@ io.on('connection', (socket) => {
 
             if (room.roundAnswers[socket.id] !== undefined) return;
 
-            // Store raw answer (mode will handle parsing/validation)
-            room.roundAnswers[socket.id] = answer;
+            // Store raw answer with timestamp for speed-based scoring
+            room.roundAnswers[socket.id] = {
+                value: answer,
+                time: Date.now()
+            };
 
             // Lock UI
             socket.emit('answer_confirmed');

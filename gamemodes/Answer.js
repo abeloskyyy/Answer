@@ -27,7 +27,8 @@ module.exports = {
 
         // Calculate differences
         room.users.forEach(user => {
-            let userAnswer = room.roundAnswers[user.id];
+            let answerData = room.roundAnswers[user.id];
+            let userAnswer = (answerData && typeof answerData === 'object') ? answerData.value : answerData;
 
             // Convert to number if it's a string (since server now sends raw input)
             if (userAnswer !== undefined && userAnswer !== null && typeof userAnswer === 'string') {
@@ -56,17 +57,22 @@ module.exports = {
         // Sort by diff (ascending)
         results.sort((a, b) => a.diff - b.diff);
 
-        // Assign points based on rank
-        // 1st: 100, 2nd: 80, ... min 10
-        const pointsStep = 20;
-        let points = 100;
+        // Assign points based on rank with tie handling
+        const pointRewards = [100, 80, 60, 40, 20];
+        let currentRewardIndex = 0;
 
         results.forEach((res, index) => {
             if (res.answer !== null && res.diff !== Infinity) {
+                // Check for tie with previous player
+                if (index > 0 && results[index].diff === results[index - 1].diff) {
+                    // Same difference, use same reward index
+                } else if (index > 0) {
+                    currentRewardIndex = index;
+                }
+
                 const user = room.users.find(u => u.id === res.id);
                 if (user) {
-                    let awarded = points - (index * pointsStep);
-                    if (awarded < 10) awarded = 10;
+                    let awarded = pointRewards[currentRewardIndex] || 10;
                     user.score += awarded;
                     res.awarded = awarded;
                 }
@@ -75,10 +81,18 @@ module.exports = {
             }
         });
 
+        // Determine tie status for front-end
+        let isTie = false;
+        if (results.length > 1 && results[0].answer !== null && results[0].diff !== Infinity) {
+            isTie = results[0].diff === results[1].diff;
+        }
+
         return {
             winner: (results[0].answer !== null && results[0].diff !== Infinity) ? results[0].name : "No one",
             correctAnswer: correctAnswer,
-            rankings: results
+            rankings: results,
+            isTie: isTie,
+            mode: 'answer'
         };
     }
 };
