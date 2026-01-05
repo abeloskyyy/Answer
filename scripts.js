@@ -84,6 +84,286 @@ function hideReconnectingMessage() {
     }
 }
 
+// Background Music System
+class MusicManager {
+    constructor() {
+        this.playlist = [];
+        this.audio = new Audio();
+        this.audio.volume = 0;
+        this.currentIndex = -1;
+        this.isMuted = localStorage.getItem('musicMuted') === 'true';
+        this.isStarted = false;
+        this.fadeDuration = 1000; // 1 second fade
+        this.duckVolume = 0.15;
+        this.normalVolume = 0.4;
+        this.duckCount = 0;
+        this.isDucked = false;
+
+        this.audio.addEventListener('ended', () => this.playNext());
+
+        document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
+
+        this.fetchPlaylist();
+    }
+
+    async fetchPlaylist() {
+        try {
+            const response = await fetch('/api/music');
+            this.playlist = await response.json();
+            if (this.playlist.length > 0) {
+                this.shufflePlaylist();
+                // If the user already interacted, start playing now
+                if (this.isStarted && this.audio.paused) {
+                    this.playNext();
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching playlist:', error);
+        }
+    }
+
+    shufflePlaylist() {
+        for (let i = this.playlist.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.playlist[i], this.playlist[j]] = [this.playlist[j], this.playlist[i]];
+        }
+    }
+
+    playNext() {
+        if (this.playlist.length === 0) return;
+
+        this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
+        if (this.currentIndex === 0) this.shufflePlaylist();
+
+        const trackName = this.playlist[this.currentIndex];
+        this.audio.src = `/assets/audio/bg-music/${trackName}`;
+        this.audio.volume = 0; // Start at 0 for fade in
+        this.audio.play().then(() => {
+            this.fadeIn();
+        }).catch(err => {
+            console.log('Autoplay blocked or error:', err);
+            this.isStarted = false; // Reset to allow retry on next click
+        });
+    }
+
+    fadeIn() {
+        if (this.isMuted) {
+            this.audio.volume = 0;
+            return;
+        }
+
+        const interval = 50;
+        const step = interval / this.fadeDuration;
+        const targetVol = this.isDucked ? this.duckVolume : this.normalVolume;
+
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+
+        this.fadeInterval = setInterval(() => {
+            if (this.audio.volume < targetVol) {
+                this.audio.volume = Math.min(this.audio.volume + step, targetVol);
+            } else {
+                this.audio.volume = Math.max(this.audio.volume - step, targetVol);
+            }
+            if (this.audio.volume === targetVol) clearInterval(this.fadeInterval);
+        }, interval);
+    }
+
+    duck() {
+        if (this.isMuted) return;
+        this.duckCount++;
+        if (this.isDucked) return;
+
+        this.isDucked = true;
+        this.fadeTo(this.duckVolume, 200);
+    }
+
+    unduck() {
+        if (this.isMuted) return;
+        this.duckCount = Math.max(0, this.duckCount - 1);
+        if (this.duckCount > 0 || !this.isDucked) return;
+
+        this.isDucked = false;
+        this.fadeTo(this.normalVolume, 300);
+    }
+
+    fadeTo(target, duration) {
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+        const interval = 30;
+        const steps = duration / interval;
+        const stepAmt = (target - this.audio.volume) / steps;
+
+        this.fadeInterval = setInterval(() => {
+            let newVol = this.audio.volume + stepAmt;
+            if ((stepAmt > 0 && newVol >= target) || (stepAmt < 0 && newVol <= target)) {
+                this.audio.volume = target;
+                clearInterval(this.fadeInterval);
+            } else {
+                this.audio.volume = newVol;
+            }
+        }, interval);
+    }
+
+    fadeOut(callback) {
+        const interval = 50;
+        const step = interval / this.fadeDuration;
+
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+
+        this.fadeInterval = setInterval(() => {
+            this.audio.volume = Math.max(this.audio.volume - step, 0);
+            if (this.audio.volume <= 0) {
+                clearInterval(this.fadeInterval);
+                if (callback) callback();
+            }
+        }, interval);
+    }
+
+    start() {
+        if (this.isStarted) return;
+        this.isStarted = true;
+        if (this.playlist.length > 0) {
+            this.playNext();
+        }
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('musicMuted', this.isMuted);
+
+        if (this.isMuted) {
+            this.fadeOut();
+        } else {
+            this.fadeIn();
+        }
+
+        return this.isMuted;
+    }
+
+    handleVisibilityChange() {
+        if (!this.isStarted) return;
+
+        if (document.visibilityState === 'hidden') {
+            this.fadeOut(() => {
+                this.audio.pause();
+            });
+        } else if (document.visibilityState === 'visible') {
+            if (!this.isMuted) {
+                this.audio.play().then(() => {
+                    this.fadeIn();
+                }).catch(err => console.log('Resume blocked:', err));
+            }
+        }
+    }
+
+    stop() {
+        this.fadeOut(() => {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+            this.isStarted = false;
+        });
+    }
+}
+
+// SFX System
+const sfxClick = new Audio('/assets/audio/sfx/btn-click.wav');
+const sfxCount = new Audio('/assets/audio/sfx/3sec-count.mp3');
+const sfxTicTac = new Audio('/assets/audio/sfx/tictac.mp3');
+const sfxGoodAns = new Audio('/assets/audio/sfx/good-ans.mp3');
+const sfxBadAns = new Audio('/assets/audio/sfx/bad-ans.mp3');
+const sfxPlayerEnter = new Audio('/assets/audio/sfx/player-enter.mp3');
+const sfxApplause = new Audio('/assets/audio/sfx/applause.mp3');
+
+// Configure SFX
+sfxTicTac.loop = true;
+sfxBadAns.playbackRate = 1.5;
+
+let ticTacTimeout = null;
+let applauseFadeInterval = null;
+let applauseTimeout = null;
+
+function playSFX(audio) {
+    if (musicManager.isMuted) return;
+
+    // Duck music
+    musicManager.duck();
+
+    const isPersistent = (audio === sfxTicTac || audio === sfxApplause);
+    const sound = isPersistent ? audio : audio.cloneNode();
+
+    if (audio === sfxBadAns) sound.playbackRate = 1.5;
+    sound.volume = 0.5;
+
+    // Unduck when one-shot sound ends
+    if (!isPersistent) {
+        sound.addEventListener('ended', () => {
+            musicManager.unduck();
+        });
+    }
+
+    sound.play().catch(err => {
+        console.log('SFX blocked:', err);
+        musicManager.unduck();
+    });
+    return sound;
+}
+
+function stopSFX(audio) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = 0.5; // Reset volume for next play
+
+    // Unduck if it was a persistent sound that we manually stopped
+    if (audio === sfxTicTac || audio === sfxApplause) {
+        musicManager.unduck();
+    }
+}
+
+function stopAllSounds() {
+    if (musicManager) musicManager.stop();
+    if (ticTacTimeout) clearTimeout(ticTacTimeout);
+    if (applauseTimeout) clearTimeout(applauseTimeout);
+    if (applauseFadeInterval) clearInterval(applauseFadeInterval);
+
+    stopSFX(sfxTicTac);
+    stopSFX(sfxCount);
+    stopSFX(sfxGoodAns);
+    stopSFX(sfxBadAns);
+    stopSFX(sfxPlayerEnter);
+    stopSFX(sfxApplause);
+}
+
+// Stop sounds on page refresh/close
+window.addEventListener('beforeunload', () => {
+    stopAllSounds();
+});
+
+// Global click sounds
+document.addEventListener('click', (e) => {
+    // Play sound for buttons or avatar options
+    if (e.target.closest('button') || e.target.classList.contains('avatar-option')) {
+        playSFX(sfxClick);
+    }
+});
+
+const musicManager = new MusicManager();
+
+// Music Toggle UI Logic
+const btnToggleMusic = document.getElementById('btn-toggle-music');
+if (musicManager.isMuted) {
+    btnToggleMusic.classList.add('muted');
+}
+
+btnToggleMusic.addEventListener('click', (e) => {
+    e.stopPropagation(); // Prevent triggering the general click start
+    const isMuted = musicManager.toggleMute();
+    btnToggleMusic.classList.toggle('muted', isMuted);
+});
+
+// Start music on first interaction
+document.addEventListener('click', () => {
+    musicManager.start();
+}, { once: true });
+
 // Background Animation
 function createMathBackground() {
     const bgContainer = document.getElementById('math-background');
@@ -335,6 +615,7 @@ btnLeaveRoom.addEventListener('click', () => {
 
 function leaveRoom() {
     if (currentRoomId) {
+        stopAllSounds();
         socket.emit('leave_room', currentRoomId);
         currentRoomId = null;
         isHost = false;
@@ -475,7 +756,10 @@ difficultyInput.addEventListener('change', () => {
 // 7. Start Game
 btnStartGame.addEventListener('click', () => {
     if (isHost && !btnStartGame.disabled) {
+        btnStartGame.disabled = true;
         socket.emit('start_game', currentRoomId);
+        // Safely re-enable if something goes wrong (socket error, etc)
+        setTimeout(() => { if (btnStartGame) btnStartGame.disabled = false; }, 4000);
     }
 });
 
@@ -626,7 +910,14 @@ socket.on('game_started', () => {
     const waitingOverlay = document.getElementById('waiting-overlay');
     if (waitingOverlay) waitingOverlay.style.display = 'none';
 
-    // Ensure Game Over overlay is closed (for those who didn't click Play Again)
+    // Play countdown SFX
+    playSFX(sfxCount);
+
+    // Hide math expression initially (prevent showing radical without number)
+    const mathExp = document.querySelector('.math-expression');
+    if (mathExp) mathExp.style.visibility = 'hidden';
+
+    // Ensure Game Over overlay is closed
     const gameOverOverlay = document.getElementById('game-over-overlay');
     if (gameOverOverlay) gameOverOverlay.style.display = 'none';
 
@@ -637,7 +928,12 @@ socket.on('game_started', () => {
     // START COUNTDOWN
     const countdownOverlay = document.getElementById('start-countdown-overlay');
     const countdownValue = document.getElementById('countdown-value');
+
+    // Reset overlay state (in case it had fade-out class from previous round)
+    countdownOverlay.classList.remove('fade-out');
     countdownOverlay.style.display = 'flex';
+    countdownOverlay.style.opacity = '1';
+    countdownOverlay.style.visibility = 'visible';
 
     let count = 3;
     countdownValue.innerText = count;
@@ -685,6 +981,9 @@ socket.on('new_round', (data) => {
     totalRoundsBadge.innerText = data.totalRounds;
 
     // 2. Show question with animation
+    const mathExp = document.querySelector('.math-expression');
+    if (mathExp) mathExp.style.visibility = 'visible';
+
     questionNumber.parentElement.classList.remove('fade-in-up');
     void questionNumber.offsetWidth; // Trigger reflow
     questionNumber.innerText = data.question.toLocaleString(); // Format with commas
@@ -698,6 +997,9 @@ socket.on('new_round', (data) => {
 
     // 4. Start Timer Animation
     if (countdownInterval) clearInterval(countdownInterval);
+    if (ticTacTimeout) clearTimeout(ticTacTimeout);
+    stopSFX(sfxTicTac);
+
     timerBar.style.transition = 'none';
     timerBar.style.width = '100%';
     timerBar.className = 'timer-bar'; // Reset colors
@@ -713,6 +1015,11 @@ socket.on('new_round', (data) => {
     // Optional: Add color changes via JS timeout or CSS
     setTimeout(() => timerBar.classList.add('warning'), duration * 0.6 * 1000);
     setTimeout(() => timerBar.classList.add('danger'), duration * 0.85 * 1000);
+
+    // TicTac sound (last 1/3)
+    ticTacTimeout = setTimeout(() => {
+        playSFX(sfxTicTac);
+    }, (duration * 2 / 3) * 1000);
 });
 
 // Submit Answer
@@ -740,8 +1047,10 @@ socket.on('answer_feedback', (data) => {
 });
 
 socket.on('round_result', (data) => {
-    // Stop local timer
+    // Stop local timer and TicTac
     if (countdownInterval) clearInterval(countdownInterval);
+    if (ticTacTimeout) clearTimeout(ticTacTimeout);
+    stopSFX(sfxTicTac);
 
     // Stop bar visually
     const computedWidth = getComputedStyle(timerBar).width;
@@ -810,6 +1119,13 @@ socket.on('round_result', (data) => {
         winnerNameEl.innerText = `${data.winner} won`;
         winnerLabel.innerText = "was the closest";
         winnerLabel.style.display = 'inline';
+    }
+
+    // Play result SFX
+    if (isWinner) {
+        playSFX(sfxGoodAns);
+    } else {
+        playSFX(sfxBadAns);
     }
 
     // Build rankings list
@@ -938,6 +1254,25 @@ socket.on('game_over', (sortedUsers) => {
     });
     // Start Confetti
     startConfetti();
+
+    // Play Applause with 4s + 1s fade-out
+    playSFX(sfxApplause);
+    if (applauseTimeout) clearTimeout(applauseTimeout);
+    if (applauseFadeInterval) clearInterval(applauseFadeInterval);
+
+    applauseTimeout = setTimeout(() => {
+        const fadeDuration = 1000;
+        const interval = 50;
+        const step = interval / fadeDuration;
+
+        applauseFadeInterval = setInterval(() => {
+            sfxApplause.volume = Math.max(sfxApplause.volume - (0.5 * step), 0);
+            if (sfxApplause.volume <= 0) {
+                clearInterval(applauseFadeInterval);
+                stopSFX(sfxApplause);
+            }
+        }, interval);
+    }, 4000);
 });
 
 // Play Again Button (Individual)
@@ -1028,7 +1363,14 @@ function startConfetti() {
 
 
 // Update player list
+let lastUserCount = 0;
 socket.on('update_users', (users) => {
+    // Play enter sound if someone joined (and it's not the initial join)
+    if (users.length > lastUserCount && lastUserCount > 0) {
+        playSFX(sfxPlayerEnter);
+    }
+    lastUserCount = users.length;
+
     playerList.innerHTML = '';
 
     users.forEach(user => {
@@ -1114,6 +1456,7 @@ socket.on('error', (msg) => {
 });
 
 socket.on('kicked', () => {
+    stopAllSounds();
     currentRoomId = null; // Prevent beforeunload prompt
     showModal('Disconnected', 'You have been kicked from the room by the host.', () => {
         location.reload();

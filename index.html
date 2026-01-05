@@ -16,6 +16,11 @@
 
     <div id="math-background"></div>
     <div class="container">
+        <!-- Background Music Toggle -->
+        <button id="btn-toggle-music" class="btn-toggle-music" title="Toggle Music">
+            <i class="fa-solid fa-volume-up"></i>
+        </button>
+
         <!-- Login Section -->
         <div id="login-section" class="screen active">
             <h1 class="game-title">Answer</h1>
@@ -27,7 +32,8 @@
                     </div>
                     <div class="avatar-dropdown" id="avatar-dropdown">
                         <div class="avatar-grid">
-                            <img src="assets/img/user-img/avatar_1.png" class="avatar-option selected" data-src="avatar_1.png">
+                            <img src="assets/img/user-img/avatar_1.png" class="avatar-option selected"
+                                data-src="avatar_1.png">
                             <img src="assets/img/user-img/avatar_2.png" class="avatar-option" data-src="avatar_2.png">
                             <img src="assets/img/user-img/avatar_3.png" class="avatar-option" data-src="avatar_3.png">
                             <img src="assets/img/user-img/avatar_4.png" class="avatar-option" data-src="avatar_4.png">
@@ -165,7 +171,7 @@
                     </div>
 
                     <div class="question-container">
-                        <div class="math-expression fade-in-up">
+                        <div class="math-expression fade-in-up" style="visibility: hidden;">
                             <span class="radical">√</span><span id="question-number"></span>
                         </div>
 

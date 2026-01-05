@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,6 +12,21 @@ const io = new Server(server);
 app.use(express.static(__dirname));
 
 const rooms = {};
+const roomTimers = new Map(); // Store room game timers: roomId -> timeout/interval
+const disconnectTimeouts = new Map(); // Store user disconnect timeouts: socketId -> timeout
+
+// API to list background music files
+app.get('/api/music', (req, res) => {
+    const musicDir = path.join(__dirname, 'assets', 'audio', 'bg-music');
+    fs.readdir(musicDir, (err, files) => {
+        if (err) {
+            return res.status(500).json({ error: 'Unable to scan directory' });
+        }
+        // Filter for audio files
+        const audioFiles = files.filter(file => /\.(mp3|wav|ogg|m4a)$/i.test(file));
+        res.json(audioFiles);
+    });
+});
 
 // Helper function to generate a unique room ID
 function generateRoomId() {
@@ -71,15 +87,17 @@ io.on('connection', (socket) => {
                 console.log(`User reconnecting to room ${roomId}: ${username} (old: ${existingUser.id}, new: ${socket.id})`);
 
                 // Cancel the disconnect timeout
-                if (existingUser.disconnectTimeout) {
-                    clearTimeout(existingUser.disconnectTimeout);
+                const dTimeout = disconnectTimeouts.get(socket.id) || disconnectTimeouts.get(existingUser.id);
+                if (dTimeout) {
+                    clearTimeout(dTimeout);
+                    disconnectTimeouts.delete(socket.id);
+                    disconnectTimeouts.delete(existingUser.id);
                 }
 
                 // Update the socket ID and clear disconnect flags
                 existingUser.id = socket.id;
                 existingUser.disconnected = false;
                 delete existingUser.disconnectTime;
-                delete existingUser.disconnectTimeout;
 
                 socket.join(roomId);
                 socket.emit('room_joined', roomId);
@@ -102,11 +120,9 @@ io.on('connection', (socket) => {
                 socket.join(roomId);
                 socket.emit('room_joined', roomId);
 
-                // Send current settings to new joiner
                 socket.emit('update_settings', room.settings);
                 socket.emit('host_status', false); // Joiner is not host
 
-                io.to(roomId).emit('update_users', room.users);
                 io.to(roomId).emit('update_users', room.users);
                 io.to(roomId).emit('receive_message', { user: 'System', text: `${username} joined the room.` });
                 console.log(`User joined room ${roomId}: ${username} (${socket.id})`);
@@ -137,20 +153,16 @@ io.on('connection', (socket) => {
     });
 
     // Game Logic Helpers
-    function generateQuestion(difficulty) {
-        // Difficulty controls the MAGNITUDE of the number
-        // Easy: 2-3 digits (100 - 999) -> Root ~10-31
-        // Normal: 5-6 digits (10,000 - 999,999) -> Root ~100-999
-        // Hard: 7-8 digits (1,000,000 - 99,999,999) -> Root ~1000-9999
+    // Load Game Modes
+    const gameModes = {
+        'answer': require('./gamemodes/Answer')
+    };
 
-        let min, max;
-        if (difficulty === 'easy') { min = 100; max = 1000; }
-        else if (difficulty === 'hard') { min = 1000000; max = 100000000; }
-        else { min = 10000; max = 1000000; } // Normal
-
-        const num = Math.floor(Math.random() * (max - min)) + min;
-        const answer = Math.floor(Math.sqrt(num));
-        return { question: num, answer: answer };
+    // Helper to get current game mode logic
+    function getGameMode(room) {
+        // Use the gameMode from settings, default to 'answer' if not set or invalid
+        const modeKey = (room.settings && room.settings.gameMode) ? room.settings.gameMode.toLowerCase() : 'answer';
+        return gameModes[modeKey] || gameModes['answer'];
     }
 
     function concludeRound(roomId) {
@@ -158,58 +170,20 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         // Stop timer
-        if (room.timer) clearInterval(room.timer);
+        const timer = roomTimers.get(roomId);
+        if (timer) {
+            clearInterval(timer);
+            roomTimers.delete(roomId);
+        }
 
-        const correctAnswer = room.question.answer;
-        const results = [];
-
-        // Calculate differences
-        room.users.forEach(user => {
-            const userAnswer = room.roundAnswers[user.id];
-            if (userAnswer !== undefined) {
-                const diff = Math.abs(userAnswer - correctAnswer);
-                results.push({
-                    id: user.id,
-                    name: user.name,
-                    answer: userAnswer,
-                    diff: diff
-                });
-            } else {
-                // Did not answer
-                results.push({
-                    id: user.id,
-                    name: user.name,
-                    answer: null,
-                    diff: Infinity
-                });
-            }
-        });
-
-        // Sort by diff (ascending)
-        results.sort((a, b) => a.diff - b.diff);
-
-        // Assign points based on rank
-        // 1st: 100, 2nd: 80, ... min 10
-        const pointsStep = 20;
-        let points = 100;
-
-        results.forEach((res, index) => {
-            if (res.answer !== null) {
-                const user = room.users.find(u => u.id === res.id);
-                if (user) {
-                    let awarded = points - (index * pointsStep);
-                    if (awarded < 10) awarded = 10;
-                    user.score += awarded;
-                    res.awarded = awarded;
-                }
-            }
-        });
+        const gameMode = getGameMode(room);
+        const resultsData = gameMode.calculateResults(room);
 
         // Broadcast results
         io.to(roomId).emit('round_result', {
-            winner: results[0].answer !== null ? results[0].name : "No one",
-            correctAnswer: correctAnswer,
-            rankings: results
+            winner: resultsData.winner,
+            correctAnswer: resultsData.correctAnswer,
+            rankings: resultsData.rankings
         });
 
         io.to(roomId).emit('update_users', room.users);
@@ -232,11 +206,13 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const qData = generateQuestion(room.settings.difficulty);
+        const gameMode = getGameMode(room);
+        const qData = gameMode.generateQuestion(room.settings.difficulty);
+
         room.question = qData;
         room.roundAnswers = {}; // Reset answers
 
-        console.log(`Room ${roomId} Round ${room.currentRound}: sqrt(${qData.question}) = ~${qData.answer}`);
+        // console.log(`Room ${roomId} Round ${room.currentRound}: Question generated`);
 
         // Broadcast New Round
         io.to(roomId).emit('new_round', {
@@ -247,15 +223,19 @@ io.on('connection', (socket) => {
         });
 
         // Start Server Timer
-        if (room.timer) clearInterval(room.timer);
+        const oldTimer = roomTimers.get(roomId);
+        if (oldTimer) clearInterval(oldTimer);
+
         let timeLeft = room.settings.timePerRound;
 
-        room.timer = setInterval(() => {
+        const timer = setInterval(() => {
             timeLeft--;
             if (timeLeft <= 0) {
                 concludeRound(roomId);
             }
         }, 1000);
+
+        roomTimers.set(roomId, timer);
 
         console.log(`Game started/round ${room.currentRound} in room ${roomId}`);
     }
@@ -263,7 +243,7 @@ io.on('connection', (socket) => {
     // Start Game (Host Only)
     socket.on('start_game', (roomId) => {
         const room = rooms[roomId];
-        if (room && room.host === socket.id) {
+        if (room && room.host === socket.id && room.gameState !== 'playing') {
             room.gameState = 'playing';
             room.currentRound = 0;
             // Reset scores
@@ -290,7 +270,8 @@ io.on('connection', (socket) => {
 
             if (room.roundAnswers[socket.id] !== undefined) return;
 
-            room.roundAnswers[socket.id] = parseInt(answer);
+            // Store raw answer (mode will handle parsing/validation)
+            room.roundAnswers[socket.id] = answer;
 
             // Lock UI
             socket.emit('answer_confirmed');
@@ -324,23 +305,25 @@ io.on('connection', (socket) => {
                 // 1. Notify the kicked user
                 io.to(targetId).emit('kicked');
 
-                // 2. Remove from room data
+                // 2. Remove the user from the room data immediately
                 room.users.splice(targetIndex, 1);
+                io.to(roomId).emit('update_users', room.users);
 
-                // 3. Make socket leave the room
-                // We need to access the socket instance of the kicked user. 
-                // Since we don't have easy access to the socket object by ID here without looking up sockets,
-                // rely on client-side 'kicked' handler to disconnect/reload, 
-                // BUT better to force leave if possible using io.sockets.sockets.
-                const targetSocket = io.sockets.sockets.get(targetId);
-                if (targetSocket) {
-                    targetSocket.leave(roomId);
+                // 3. Clear any disconnect timeouts if they were somehow active
+                const dTimeout = disconnectTimeouts.get(targetId);
+                if (dTimeout) {
+                    clearTimeout(dTimeout);
+                    disconnectTimeouts.delete(targetId);
                 }
 
-                // 4. Broadcast updates
-                io.to(roomId).emit('update_users', room.users);
+                // 4. Force disconnect the socket
+                const targetSocket = io.sockets.sockets.get(targetId);
+                if (targetSocket) {
+                    targetSocket.disconnect(true); // true to close the underlying connection
+                }
+
                 io.to(roomId).emit('receive_message', { user: 'System', text: `${targetUser.name} was kicked by the host.` });
-                console.log(`User kicked from room ${roomId}: ${targetUser.name} (${targetId}) by host (${socket.id})`);
+                console.log(`Host kicked player: ${targetUser.name} (${targetId}) in room ${roomId}`);
             }
         }
     });
@@ -383,6 +366,16 @@ io.on('connection', (socket) => {
 
             if (userIndex !== -1) {
                 const user = room.users[userIndex];
+
+                // If user was kicked, remove them immediately (no grace period)
+                if (user.kicked) {
+                    // Kicked users are already handled by the kick_player event,
+                    // their socket is disconnected and removed from room.users.
+                    // This path should ideally not be hit for kicked users.
+                    console.log(`Kicked user's socket disconnected: ${user.name} (${socket.id})`);
+                    return;
+                }
+
                 console.log(`User disconnected from room ${roomId}: ${user.name} (${socket.id}) - Grace period active`);
 
                 // Mark user as disconnected but don't remove yet
@@ -390,7 +383,7 @@ io.on('connection', (socket) => {
                 user.disconnectTime = Date.now();
 
                 // Set timeout to remove user if they don't reconnect
-                user.disconnectTimeout = setTimeout(() => {
+                const timeout = setTimeout(() => {
                     // Check if user is still disconnected
                     const currentUser = room.users.find(u => u.id === socket.id);
                     if (currentUser && currentUser.disconnected) {
@@ -405,6 +398,7 @@ io.on('connection', (socket) => {
                             // If host leaves, assign new host or delete room
                             if (room.users.length === 0) {
                                 delete rooms[roomId];
+                                roomTimers.delete(roomId);
                                 console.log(`Room deleted: ${roomId}`);
                             } else if (room.host === socket.id) {
                                 room.host = room.users[0].id; // Assign new host
@@ -413,8 +407,10 @@ io.on('connection', (socket) => {
                             }
                         }
                     }
+                    disconnectTimeouts.delete(socket.id);
                 }, DISCONNECT_GRACE_PERIOD);
 
+                disconnectTimeouts.set(socket.id, timeout);
                 break;
             }
         }

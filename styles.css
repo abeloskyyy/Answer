@@ -1009,6 +1009,55 @@ select:focus {
     color: white;
 }
 
+/* Background Music Toggle */
+.btn-toggle-music {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: white;
+    border: none;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    color: var(--primary);
+    cursor: pointer;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.btn-toggle-music:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.btn-toggle-music:active {
+    transform: scale(0.95);
+}
+
+.btn-toggle-music.muted {
+    color: var(--danger);
+}
+
+.btn-toggle-music.muted i::before {
+    content: "\f6a9";
+    /* fa-volume-xmark */
+}
+
+@media (max-width: 768px) {
+    .btn-toggle-music {
+        top: auto;
+        bottom: 20px;
+        right: 15px;
+        width: 40px;
+        height: 40px;
+    }
+}
+
+
 /* Numeric Keypad */
 .numeric-keypad {
     display: none;
