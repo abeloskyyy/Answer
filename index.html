@@ -19,9 +19,29 @@
         <!-- Login Section -->
         <div id="login-section" class="screen active">
             <h1 class="game-title">Answer</h1>
-            <div class="card">
-                <input type="text" id="username" placeholder="Enter your nickname" maxlength="12">
-                <button id="btn-login" class="btn-primary">Play</button>
+            <div class="card login-card-content">
+                <div class="avatar-section">
+                    <div class="current-avatar-container" id="avatar-selector-btn">
+                        <img src="assets/img/user-img/avatar_1.png" id="selected-avatar-preview" alt="Avatar">
+                        <div class="avatar-edit-overlay"><i class="fa-solid fa-pencil"></i></div>
+                    </div>
+                    <div class="avatar-dropdown" id="avatar-dropdown">
+                        <div class="avatar-grid">
+                            <img src="assets/img/user-img/avatar_1.png" class="avatar-option selected" data-src="avatar_1.png">
+                            <img src="assets/img/user-img/avatar_2.png" class="avatar-option" data-src="avatar_2.png">
+                            <img src="assets/img/user-img/avatar_3.png" class="avatar-option" data-src="avatar_3.png">
+                            <img src="assets/img/user-img/avatar_4.png" class="avatar-option" data-src="avatar_4.png">
+                            <img src="assets/img/user-img/avatar_5.png" class="avatar-option" data-src="avatar_5.png">
+                            <img src="assets/img/user-img/avatar_6.png" class="avatar-option" data-src="avatar_6.png">
+                            <img src="assets/img/user-img/avatar_7.png" class="avatar-option" data-src="avatar_7.png">
+                            <img src="assets/img/user-img/avatar_8.png" class="avatar-option" data-src="avatar_8.png">
+                        </div>
+                    </div>
+                </div>
+                <div class="login-form">
+                    <input type="text" id="username" placeholder="Nickname" maxlength="12">
+                    <button id="btn-login" class="btn-primary">Play</button>
+                </div>
             </div>
         </div>
 
@@ -60,20 +80,212 @@
                         <!-- Players go here -->
                     </ul>
                 </div>
-                <div class="chat-area">
-                    <div id="chat-messages" class="messages"></div>
-                    <div class="chat-input local-server-adjustment">
-                        <input type="text" id="chat-input" placeholder="Type a message...">
-                        <button style="" id="btn-send-chat" class="btn-small"><i class="fa-solid fa-paper-plane"></i></button>
+                <!-- Settings / Lobby Area (Visible when waiting) -->
+                <div class="settings-area" id="lobby-settings-area">
+                    <!-- 1. Mode Selection View -->
+                    <div id="mode-selection-view">
+                        <div class="status-message" id="guest-mode-msg" style="display: none;">
+                            Waiting for host to select a game mode...
+                        </div>
+
+                        <h2 class="section-title" style="font-size: 1.8rem;">Select Game Mode</h2>
+                        <div class="mode-selection-area">
+                            <div id="mode-card-root-rush" class="mode-card">
+                                <img src="https://cdn-icons-png.flaticon.com/512/4720/4720458.png" alt="Root Rush"
+                                    class="mode-icon-img">
+                                <span class="mode-name">Root Rush</span>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- 2. Configuration View -->
+                    <div id="configuration-view" style="display: none;">
+                        <div class="settings-header">
+                            <button id="btn-back-mode" class="btn-back-mode">
+                                <i class="fa-solid fa-arrow-left"></i>
+                            </button>
+                            <h2 style="margin: 0; font-size: 1.5rem;">Configure Game</h2>
+                        </div>
+
+                        <!-- Host Controls -->
+                        <div id="host-controls">
+                            <div class="setting-group">
+                                <label>Rounds: <span id="rounds-display">5</span></label>
+                                <input type="range" id="rounds-input" min="3" max="20" value="5">
+                            </div>
+
+                            <div class="setting-group">
+                                <label>Time per Round: <span id="time-display">15s</span></label>
+                                <input type="range" id="time-input" min="5" max="60" value="15" step="5">
+                            </div>
+
+                            <div class="setting-group">
+                                <label>Difficulty</label>
+                                <select id="difficulty-input">
+                                    <option value="easy">Easy (100-1k)</option>
+                                    <option value="normal" selected>Normal (10k-1M)</option>
+                                    <option value="hard">Hard (1M-100M)</option>
+                                </select>
+                            </div>
+
+                            <button id="btn-start-game" class="btn-primary" disabled>Start Game</button>
+                        </div>
+
+                        <!-- Guest View of Settings -->
+                        <div id="guest-controls" style="display: none;">
+                            <div class="status-message">
+                                Host is configuring the game...
+                            </div>
+                            <div class="settings-preview">
+                                <div class="preview-item">
+                                    <i class="fa-solid fa-list-ol"></i>
+                                    <span id="p-rounds">5 Rounds</span>
+                                </div>
+                                <div class="preview-item">
+                                    <i class="fa-regular fa-clock"></i>
+                                    <span id="p-time">15s</span>
+                                </div>
+                                <div class="preview-item">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <span id="p-difficulty">Normal</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gameplay Area (Visible when playing) -->
+                <div id="gameplay-area" style="display: none;">
+                    <div class="game-header-bar">
+                        <div class="round-badge">Round <span id="game-round">1</span>/<span
+                                id="game-total-rounds">5</span></div>
+                        <div class="timer-container">
+                            <div id="timer-bar" class="timer-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="question-container">
+                        <div class="math-expression fade-in-up">
+                            <span class="radical">√</span><span id="question-number"></span>
+                        </div>
+
+                        <!-- Start Countdown Overlay -->
+                        <div id="start-countdown-overlay" class="start-countdown-overlay" style="display: none;">
+                            <div class="countdown-number" id="countdown-value">3</div>
+                        </div>
+                    </div>
+
+                    <div class="input-container">
+                        <input type="number" id="game-input" placeholder="?" inputmode="numeric" pattern="[0-9]*">
+                        <button id="btn-submit-answer" class="btn-primary"><i
+                                class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+
+                    <div id="feedback-message" class="feedback-message"></div>
+
+                    <!-- Round Results Overlay -->
+                    <div id="round-results-overlay" class="round-results-overlay" style="display: none;">
+                        <div class="round-results-content">
+                            <div class="correct-answer-section">
+                                <div class="label">Correct Answer</div>
+                                <div id="result-correct-answer" class="correct-answer-value">351</div>
+                            </div>
+
+                            <div id="winner-section" class="winner-section">
+                                <i class="fa-solid fa-trophy"></i>
+                                <span id="result-winner-name">Player 1</span>
+                                <span class="winner-label">was closest!</span>
+                            </div>
+
+                            <div class="rankings-section">
+                                <h3>Rankings</h3>
+                                <div id="rankings-list" class="rankings-list">
+                                    <!-- Rankings will be populated here -->
+                                </div>
+                            </div>
+
+                            <div class="next-round-timer">
+                                Next round in <span id="next-round-countdown">5</span>s
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Waiting Overlay -->
+                    <div id="waiting-overlay" class="waiting-overlay" style="display: none;">
+                        <div class="waiting-content">
+                            <div class="spinner"></div>
+                            <p>Waiting for other players...</p>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Socket.io -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="scripts.js"></script>
+        <!-- Game Over Overlay (moved outside gameplay-area) -->
+        <div id="game-over-overlay" class="game-over-overlay" style="display: none;">
+            <canvas id="confetti-canvas"></canvas>
+            <div class="podium-container">
+                <h2 class="podium-title">Final Results</h2>
+                <div class="podium">
+                    <!-- 2nd Place -->
+                    <div class="podium-place second">
+                        <div class="podium-avatar">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="podium-bar">
+                            <div class="rank-label">2</div>
+                        </div>
+                        <div class="podium-name" id="podium-name-2">-</div>
+                        <div class="podium-score" id="podium-score-2">-</div>
+                    </div>
+                    <!-- 1st Place -->
+                    <div class="podium-place first">
+                        <div class="crown-icon"><i class="fa-solid fa-crown"></i></div>
+                        <div class="podium-avatar">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="podium-bar">
+                            <div class="rank-label">1</div>
+                        </div>
+                        <div class="podium-name" id="podium-name-1">-</div>
+                        <div class="podium-score" id="podium-score-1">-</div>
+                    </div>
+                    <!-- 3rd Place -->
+                    <div class="podium-place third">
+                        <div class="podium-avatar">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="podium-bar">
+                            <div class="rank-label">3</div>
+                        </div>
+                        <div class="podium-name" id="podium-name-3">-</div>
+                        <div class="podium-score" id="podium-score-3">-</div>
+                    </div>
+                </div>
+                <div class="podium-actions">
+                    <button id="btn-play-again" class="btn-primary"
+                        style="background-color: #2ecc71; box-shadow: 0 4px 0 #27ae60;">Play Again</button>
+                    <button id="btn-back-lobby" class="btn-primary">Back to Lobby</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Modal Overlay -->
+        <div id="custom-modal-overlay" class="custom-modal-overlay" style="display: none;">
+            <div class="custom-modal">
+                <h3 id="modal-title" class="modal-title">Alert</h3>
+                <p id="modal-message" class="modal-message">Something happened.</p>
+                <div class="modal-buttons">
+                    <button id="modal-btn-cancel" class="btn-secondary">Cancel</button>
+                    <button id="modal-btn-confirm" class="btn-primary">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Socket.io -->
+        <script src="/socket.io/socket.io.js"></script>
+        <script src="scripts.js"></script>
 </body>
 
 </html>
