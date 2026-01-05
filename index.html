@@ -27,7 +27,8 @@
                     </div>
                     <div class="avatar-dropdown" id="avatar-dropdown">
                         <div class="avatar-grid">
-                            <img src="assets/img/user-img/avatar_1.png" class="avatar-option selected" data-src="avatar_1.png">
+                            <img src="assets/img/user-img/avatar_1.png" class="avatar-option selected"
+                                data-src="avatar_1.png">
                             <img src="assets/img/user-img/avatar_2.png" class="avatar-option" data-src="avatar_2.png">
                             <img src="assets/img/user-img/avatar_3.png" class="avatar-option" data-src="avatar_3.png">
                             <img src="assets/img/user-img/avatar_4.png" class="avatar-option" data-src="avatar_4.png">
@@ -176,9 +177,29 @@
                     </div>
 
                     <div class="input-container">
-                        <input type="number" id="game-input" placeholder="?" inputmode="numeric" pattern="[0-9]*">
+                        <button id="btn-toggle-keypad" class="btn-toggle-keypad" title="Toggle Keypad">
+                            <i class="fa-solid fa-keyboard"></i>
+                        </button>
+                        <input type="number" id="game-input" placeholder="?" inputmode="none" pattern="[0-9]*">
                         <button id="btn-submit-answer" class="btn-primary"><i
                                 class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+
+                    <!-- Numeric Keypad -->
+                    <div id="numeric-keypad" class="numeric-keypad">
+                        <button class="keypad-button number" data-value="7">7</button>
+                        <button class="keypad-button number" data-value="8">8</button>
+                        <button class="keypad-button number" data-value="9">9</button>
+                        <button class="keypad-button number" data-value="4">4</button>
+                        <button class="keypad-button number" data-value="5">5</button>
+                        <button class="keypad-button number" data-value="6">6</button>
+                        <button class="keypad-button number" data-value="1">1</button>
+                        <button class="keypad-button number" data-value="2">2</button>
+                        <button class="keypad-button number" data-value="3">3</button>
+                        <button class="keypad-button action" data-action="clear">C</button>
+                        <button class="keypad-button number" data-value="0">0</button>
+                        <button class="keypad-button action" data-action="backspace"><i
+                                class="fa-solid fa-delete-left"></i></button>
                     </div>
 
                     <div id="feedback-message" class="feedback-message"></div>

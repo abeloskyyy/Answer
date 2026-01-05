@@ -408,6 +408,8 @@ button:active {
 /* Custom Range Slider */
 input[type=range] {
     -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     width: 100%;
     margin: 15px 0;
     background: transparent;
@@ -454,6 +456,8 @@ select {
     font-family: inherit;
     font-size: 1.1rem;
     cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     appearance: none;
     background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236C5CE7%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
     background-repeat: no-repeat;
@@ -589,7 +593,7 @@ select:focus {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
     .container {
-        padding: 20px;
+        padding: 10px;
         height: 100dvh;
         /* Force full mobile viewport height */
         display: flex;
@@ -622,73 +626,90 @@ select:focus {
         /* Room starts at top to stretch chat */
         padding-top: 0;
         /* Remove extra padding since container has it */
+        overflow: hidden;
     }
 
     .game-title {
-        font-size: 2.5rem;
-        margin-bottom: 20px;
+        font-size: 2rem;
+        margin-bottom: 15px;
         flex-shrink: 0;
     }
 
-    .card {
-        padding: 30px;
-        width: 100%;
-        flex-shrink: 0;
-    }
-
-    /* Room Header: Stack everything */
-    .room-header {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 15px;
-        gap: 15px;
-        flex-shrink: 0;
+    .section-title {
+        font-size: 1.8rem;
         margin-bottom: 15px;
     }
 
-    .room-info {
-        flex-direction: column;
+    .card {
+        padding: 20px;
         width: 100%;
-        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* Room Header: Stack everything - SMALLER */
+    .room-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
         gap: 10px;
+        flex-shrink: 0;
+        margin-bottom: 10px;
+    }
+
+    .room-info {
+        flex-direction: row;
+        width: auto;
+        justify-content: flex-start;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .room-info h3 {
+        font-size: 1.1rem;
+        margin: 0;
     }
 
     .room-actions {
-        width: 100%;
-        gap: 15px;
+        width: auto;
+        gap: 8px;
+        flex-shrink: 0;
     }
 
     .room-actions .btn-icon {
-        flex: 1;
-        height: 50px;
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
     }
 
     #btn-leave-room {
-        width: 100%;
-        padding: 15px;
+        width: auto;
+        padding: 8px 15px;
+        font-size: 0.9rem;
     }
 
     /* Game Area: Fill remaining space */
     .game-area {
         flex-direction: column;
-        gap: 15px;
+        gap: 10px;
         padding-bottom: 0;
         /* Container padding handles bottom */
         height: auto;
         flex: 1;
         /* GROW to fill all empty space */
         min-height: 0;
+        overflow: hidden;
     }
 
-    /* Sidebar becomes a top bar for players */
+    /* Sidebar becomes a compact top bar for players */
     .sidebar {
         width: 100%;
         height: auto;
         min-height: auto;
-        padding: 15px;
+        padding: 10px;
         flex-direction: row;
         align-items: center;
-        gap: 15px;
+        gap: 10px;
         flex-shrink: 0;
         order: 1;
     }
@@ -696,13 +717,14 @@ select:focus {
     .sidebar h4 {
         margin: 0;
         white-space: nowrap;
+        font-size: 1rem;
     }
 
     #player-list {
         display: flex;
         flex-direction: row;
         overflow-x: auto;
-        gap: 10px;
+        gap: 8px;
         padding-bottom: 5px;
         width: 100%;
     }
@@ -710,8 +732,78 @@ select:focus {
     #player-list li {
         margin: 0;
         white-space: nowrap;
+        font-size: 0.85rem;
+        padding: 6px 12px;
+    }
+
+    /* Settings Area - More compact */
+    .settings-area {
+        padding: 15px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .settings-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+    }
+
+    .settings-header h2 {
+        font-size: 1.2rem !important;
+    }
+
+    .btn-back-mode {
+        width: 35px;
+        height: 35px;
+        margin-right: 10px;
+    }
+
+    .setting-group {
+        margin-bottom: 15px;
+    }
+
+    .setting-group label {
         font-size: 0.95rem;
-        padding: 8px 15px;
+        margin-bottom: 8px;
+    }
+
+    /* Mode Selection - Smaller cards */
+    .mode-selection-area {
+        gap: 15px;
+        padding: 5px;
+    }
+
+    .mode-card {
+        padding: 12px;
+        max-width: 150px;
+    }
+
+    .mode-card img.mode-icon-img {
+        width: 45%;
+        height: 45%;
+        margin-bottom: 10px;
+    }
+
+    .mode-name {
+        font-size: 0.9rem;
+    }
+
+    #btn-start-game {
+        margin-top: 20px;
+        padding: 15px;
+        font-size: 1.1rem;
+    }
+
+    /* Inputs and buttons */
+    input,
+    select {
+        padding: 12px 15px;
+        font-size: 1rem;
+    }
+
+    button {
+        padding: 12px 15px;
+        font-size: 1rem;
     }
 }
 
@@ -796,6 +888,62 @@ select:focus {
     color: var(--primary);
 }
 
+/* Mobile Gameplay Responsiveness */
+@media (max-width: 768px) {
+    #gameplay-area {
+        padding: 12px;
+    }
+
+    .game-header-bar {
+        margin-bottom: 12px;
+        gap: 10px;
+    }
+
+    .round-badge {
+        padding: 4px 10px;
+        font-size: 0.85rem;
+    }
+
+    .timer-container {
+        height: 8px;
+    }
+
+    .math-expression {
+        font-size: 2.5rem;
+    }
+
+    .radical {
+        font-size: 3rem;
+        margin-right: -5px;
+    }
+
+    .question-container {
+        margin: 15px 0;
+    }
+
+    .input-container {
+        max-width: 100%;
+    }
+
+    #game-input {
+        font-size: 1.5rem;
+        padding: 8px;
+    }
+
+    #btn-submit-answer {
+        padding: 0 20px;
+        font-size: 1.2rem;
+    }
+
+    .feedback-message {
+        font-size: 1.2rem;
+    }
+
+    .countdown-number {
+        font-size: 5rem;
+    }
+}
+
 /* Bigger on desktop */
 @media (min-width: 768px) {
     .math-expression {
@@ -824,6 +972,128 @@ select:focus {
     border-radius: 15px;
     font-weight: bold;
     color: var(--primary);
+}
+
+/* Keypad Toggle Button */
+.btn-toggle-keypad {
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #dfe6e9;
+    color: var(--text);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 3px 0 #b2bec3;
+}
+
+.btn-toggle-keypad:hover {
+    background-color: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 var(--primary-dark);
+}
+
+.btn-toggle-keypad:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #b2bec3;
+}
+
+.btn-toggle-keypad.active {
+    background-color: var(--primary);
+    color: white;
+}
+
+/* Numeric Keypad */
+.numeric-keypad {
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 400px;
+    margin: 15px auto 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 15px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.numeric-keypad.visible {
+    display: grid;
+}
+
+.keypad-button {
+    padding: 20px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.keypad-button.number {
+    background-color: white;
+    color: var(--text);
+    box-shadow: 0 4px 0 #dfe6e9;
+}
+
+.keypad-button.number:hover {
+    background-color: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 var(--primary-dark);
+}
+
+.keypad-button.number:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #dfe6e9;
+}
+
+.keypad-button.action {
+    background-color: var(--danger);
+    color: white;
+    box-shadow: 0 4px 0 var(--danger-dark);
+}
+
+.keypad-button.action:hover {
+    background-color: #ff5252;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 var(--danger-dark);
+}
+
+.keypad-button.action:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--danger-dark);
+}
+
+/* Mobile: Always show keypad, readonly input */
+@media (max-width: 768px) {
+    .numeric-keypad {
+        display: grid;
+    }
+
+    .btn-toggle-keypad {
+        display: none;
+    }
+
+    #game-input {
+        pointer-events: none;
+        user-select: none;
+    }
+
+    .keypad-button {
+        padding: 15px;
+        font-size: 1.5rem;
+    }
 }
 
 
@@ -1039,19 +1309,18 @@ select:focus {
    ROUND RESULTS OVERLAY
    ========================= */
 .round-results-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.9);
     backdrop-filter: blur(5px);
-    z-index: 1000;
+    z-index: 2500;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: fadeIn 0.3s ease-out;
-    border-radius: 20px;
 }
 
 .round-results-content {
@@ -1060,10 +1329,11 @@ select:focus {
     padding: 30px;
     max-width: 500px;
     width: 90%;
-    max-height: 80%;
+    max-height: 85vh;
     overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: slideInUp 0.4s ease-out;
+    position: relative;
 }
 
 @keyframes slideInUp {
@@ -1274,22 +1544,64 @@ select:focus {
 /* Mobile Responsive */
 @media (max-width: 768px) {
     .round-results-content {
-        padding: 20px;
+        padding: 15px;
         width: 95%;
+        max-height: 85%;
+    }
+
+    .correct-answer-section {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+    }
+
+    .correct-answer-section .label {
+        font-size: 0.85rem;
     }
 
     .correct-answer-value {
-        font-size: 2.5rem;
+        font-size: 2rem;
+    }
+
+    .winner-section {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .winner-section i {
+        font-size: 2rem;
+        margin-bottom: 8px;
     }
 
     .winner-section #result-winner-name {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
+    }
+
+    .winner-section .winner-label {
+        font-size: 0.9rem;
+    }
+
+    .rankings-section h3 {
+        font-size: 1rem;
+        margin-bottom: 10px;
+    }
+
+    .rankings-list {
+        padding: 8px;
+        max-height: 200px;
     }
 
     .ranking-row {
-        grid-template-columns: 35px 1fr auto;
-        gap: 8px;
-        padding: 10px;
+        grid-template-columns: 30px 1fr auto;
+        gap: 6px;
+        padding: 8px;
+        font-size: 0.85rem;
+    }
+
+    .ranking-row .rank-number {
+        font-size: 1rem;
+    }
+
+    .ranking-row .player-name {
         font-size: 0.9rem;
     }
 
@@ -1299,8 +1611,17 @@ select:focus {
     }
 
     .ranking-row .points-earned {
-        min-width: 50px;
+        min-width: 45px;
+        font-size: 0.9rem;
+    }
+
+    .next-round-timer {
         font-size: 0.95rem;
+        padding: 10px;
+    }
+
+    .next-round-timer span {
+        font-size: 1.1rem;
     }
 }
 
@@ -1308,17 +1629,16 @@ select:focus {
    WAITING OVERLAY
    ========================= */
 .waiting-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.9);
-    z-index: 500;
+    background: rgba(255, 255, 255, 0.95);
+    z-index: 2000;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 20px;
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -1390,7 +1710,8 @@ select:focus {
 .podium-title {
     color: #fdcb6e;
     font-size: 3rem;
-    margin-bottom: 40px;
+    margin-bottom: 20px;
+    margin-top: 0;
     text-shadow: 0 0 10px rgba(253, 203, 110, 0.5);
     animation: slideInDown 0.8s ease-out;
 }
@@ -1563,6 +1884,85 @@ select:focus {
     flex: 1;
 }
 
+/* Mobile Podium Responsiveness */
+@media (max-width: 768px) {
+    .podium-container {
+        max-width: 95%;
+        padding: 0 10px;
+    }
+
+    .podium-title {
+        font-size: 2rem;
+        margin-bottom: 15px;
+        margin-top: 0;
+    }
+
+    .podium {
+        height: 220px;
+        gap: 10px;
+        margin-bottom: 25px;
+    }
+
+    .podium-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+        margin-bottom: 8px;
+    }
+
+    .first .podium-avatar {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+
+    .first .podium-bar {
+        --target-height: 140px;
+    }
+
+    .second .podium-bar {
+        --target-height: 100px;
+    }
+
+    .third .podium-bar {
+        --target-height: 70px;
+    }
+
+    .rank-label {
+        font-size: 1.5rem;
+    }
+
+    .first .rank-label {
+        font-size: 2rem;
+    }
+
+    .podium-name {
+        font-size: 0.95rem;
+        margin-top: 8px;
+    }
+
+    .podium-score {
+        font-size: 0.8rem;
+    }
+
+    .crown-icon {
+        top: -30px;
+        font-size: 2rem;
+    }
+
+    .podium-actions {
+        margin-top: 20px;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .podium-actions button {
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+    }
+}
+
 /* UX Improvements for Round Results */
 .correct-answer-value {
     font-size: 2.5rem;
@@ -1578,17 +1978,16 @@ select:focus {
 
 /* Start Countdown Overlay */
 .start-countdown-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background: white;
-    z-index: 100;
+    z-index: 3000;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 20px;
 }
 
 .countdown-number {

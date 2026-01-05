@@ -466,6 +466,69 @@ const btnSubmitAnswer = document.getElementById('btn-submit-answer');
 const timerBar = document.getElementById('timer-bar');
 const feedbackContainer = document.getElementById('feedback-message');
 
+// Numeric Keypad Elements
+const numericKeypad = document.getElementById('numeric-keypad');
+const btnToggleKeypad = document.getElementById('btn-toggle-keypad');
+const keypadButtons = document.querySelectorAll('.keypad-button');
+
+// Detect if mobile device
+function isMobileDevice() {
+    return window.innerWidth <= 768 || ('ontouchstart' in window);
+}
+
+// Initialize keypad visibility based on device
+function initializeKeypad() {
+    if (isMobileDevice()) {
+        numericKeypad.classList.add('visible');
+        gameInput.setAttribute('readonly', 'readonly');
+        gameInput.setAttribute('inputmode', 'none');
+    } else {
+        numericKeypad.classList.remove('visible');
+        gameInput.removeAttribute('readonly');
+        btnToggleKeypad.classList.remove('active');
+    }
+}
+
+// Toggle keypad on desktop
+btnToggleKeypad.addEventListener('click', () => {
+    numericKeypad.classList.toggle('visible');
+    btnToggleKeypad.classList.toggle('active');
+});
+
+// Handle keypad button clicks
+keypadButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const value = button.getAttribute('data-value');
+        const action = button.getAttribute('data-action');
+
+        if (value !== null) {
+            // Number button clicked
+            gameInput.value += value;
+        } else if (action === 'backspace') {
+            // Backspace button clicked
+            gameInput.value = gameInput.value.slice(0, -1);
+        } else if (action === 'clear') {
+            // Clear button clicked
+            gameInput.value = '';
+        }
+
+        // Focus input to maintain cursor position (desktop only)
+        if (!isMobileDevice()) {
+            gameInput.focus();
+        }
+    });
+});
+
+// Re-initialize on window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(initializeKeypad, 200);
+});
+
+// Initialize on load
+initializeKeypad();
+
 let countdownInterval;
 
 // GAMEPLAY EVENTS
