@@ -100,28 +100,94 @@ body {
 
 .screen.active {
     display: flex;
+    animation: premiumMenuFadeIn 0.3s ease-out;
 }
 
 @keyframes fadeIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
     }
 
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 
-/* Titles */
-.game-title {
-    font-size: 3.5rem;
-    color: var(--primary);
-    text-shadow: 3px 3px 0px #a29bfe;
+@keyframes premiumMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+        filter: blur(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes premiumMenuFadeOut {
+    from {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.05) translateY(-10px);
+        filter: blur(5px);
+    }
+}
+
+.screen-exit {
+    animation: premiumMenuFadeOut 0.3s ease-in forwards !important;
+}
+
+.fade-transition {
+    animation: premiumMenuFadeIn 0.4s ease-out;
+}
+
+.fade-transition[style*="display: flex"] {
+    display: flex !important;
+}
+
+.fade-transition[style*="display: block"] {
+    display: block !important;
+}
+
+/* Logo Styling */
+.game-logo-container {
     margin-bottom: 30px;
     text-align: center;
-    line-height: 1.2;
+    width: 100%;
+    animation: fadeIn 1s ease-out;
+}
+
+.game-logo {
+    max-width: 350px;
+    height: auto;
+    filter: drop-shadow(0 8px 20px rgba(108, 92, 231, 0.3));
+    animation: floating 4s ease-in-out infinite;
+}
+
+@keyframes floating {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-15px);
+    }
+}
+
+@media (max-width: 768px) {
+    .game-logo {
+        max-width: 250px;
+    }
 }
 
 .section-title {
@@ -143,6 +209,13 @@ body {
     flex-direction: column;
     gap: 20px;
     text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
 }
 
 /* Inputs & Buttons */
@@ -169,14 +242,19 @@ button {
     font-size: 1.2rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.1s, box-shadow 0.1s;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     color: white;
     width: 100%;
-    /* Full width by default */
+}
+
+button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 button:active {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.98);
 }
 
 .btn-primary {
@@ -1127,7 +1205,9 @@ select:focus {
 /* Mobile: Always show keypad, readonly input */
 @media (max-width: 768px) {
     .numeric-keypad {
-        /* No longer forced; JS handles .visible class */
+        /* JS handles .visible class visibility */
+        gap: 8px;
+        padding: 10px;
     }
 
     .btn-toggle-keypad {

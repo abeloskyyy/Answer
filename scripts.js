@@ -515,8 +515,23 @@ let currentSettings = {}; // Cache for instant UI updates
 
 // Navigation
 function switchScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
+    const currentScreen = document.querySelector('.screen.active');
+    const nextScreen = document.getElementById(screenId);
+
+    if (currentScreen && currentScreen.id !== screenId) {
+        // Add exit animation
+        currentScreen.classList.add('screen-exit');
+
+        // Wait for animation to finish
+        setTimeout(() => {
+            currentScreen.classList.remove('active', 'screen-exit');
+            nextScreen.classList.add('active');
+        }, 300); // Match CSS animation duration
+    } else {
+        // Fallback for first load or same screen
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active', 'screen-exit'));
+        nextScreen.classList.add('active');
+    }
 }
 
 // Event Listeners
@@ -673,8 +688,10 @@ function updateLobbyUI(settings) {
 
     if (!isModeSelected) {
         // Mode Selection Phase
-        modeSelectionView.style.display = 'block';
-        configurationView.style.display = 'none';
+        if (modeSelectionView.style.display !== 'block') {
+            modeSelectionView.style.display = 'block';
+            configurationView.style.display = 'none';
+        }
 
         if (isHost) {
             // Host sees clickable cards
@@ -691,9 +708,11 @@ function updateLobbyUI(settings) {
         }
     } else {
         // Configuration Phase
-        modeSelectionView.style.display = 'none';
-        configurationView.style.display = 'flex'; // It's a flex column
-        configurationView.style.flexDirection = 'column';
+        if (configurationView.style.display !== 'flex') {
+            modeSelectionView.style.display = 'none';
+            configurationView.style.display = 'flex'; // It's a flex column
+            configurationView.style.flexDirection = 'column';
+        }
 
         if (isHost) {
             hostControls.style.display = 'block';
