@@ -12,7 +12,8 @@ const io = new Server(server);
 const gameModes = {
     'root_rush': require('./gamemodes/RootRush'),
     'prime_master': require('./gamemodes/PrimeMaster'),
-    'twenty_four': require('./gamemodes/TwentyFour')
+    'twenty_four': require('./gamemodes/TwentyFour'),
+    'binary_blitz': require('./gamemodes/BinaryBlitz')
 };
 
 // Serve static files from current directory

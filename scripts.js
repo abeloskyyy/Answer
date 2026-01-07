@@ -646,6 +646,19 @@ const tutorials = {
                 <li>Example: (8 - 4) * (8 - 2) = 24</li>
             </ul>
         `
+    },
+    'binary_blitz': {
+        title: 'How to Play: Binary Blitz',
+        html: `
+            <p><strong>Goal:</strong> Convert the decimal number to binary.</p>
+            <p><strong>Gameplay:</strong></p>
+            <ul>
+                <li>A decimal number will appear (e.g., 13).</li>
+                <li>Type the binary equivalent (e.g., 1101) using the 0/1 keypad.</li>
+                <li>Be the fastest to get points!</li>
+                <li>Incorrect answers get 0 points.</li>
+            </ul>
+        `
     }
 };
 
@@ -800,22 +813,20 @@ function updateLobbyUI(settings) {
 
             // Reset header text to "Configure:" for host
             const configH2 = document.querySelector('#configuration-view h2');
-            if (configH2 && configH2.firstChild.textContent.trim() !== "Configure:") {
+            if (configH2 && configH2.firstChild && configH2.firstChild.nodeType === Node.TEXT_NODE) {
+                configH2.firstChild.textContent = "Configure: ";
+            } else if (configH2) {
+                // Fallback if structure is lost
                 configH2.innerHTML = `Configure: <span id="config-mode-name" style="color: var(--primary);">${niceName}</span>`;
-                // We replaced innerHTML, so we need to re-bind the span reference if we use the variable later? 
-                // The variable 'configModeName' holds reference to the OLD span if we replace innerHTML. 
-                // Better to just change the text node.
-            }
-            // Actually, easier way:
-            const h2 = configModeName.parentElement;
-            // We know structure is H2 -> [Text "Configure: "] [Span]
-            if (h2.firstChild.nodeType === Node.TEXT_NODE) {
-                h2.firstChild.textContent = "Configure: ";
+                // Update global reference if we nuked it
+                // But better to trust the HTML structure is stable
             }
 
             // MODE-SPECIFIC CONFIGURATION UI (HOST)
             const diffSelect = document.getElementById('difficulty-input');
             const modeTitle = document.querySelector('#configuration-view h2');
+            console.log("updateLobbyUI DEBUG:", settings.gameMode);
+
             if (settings.gameMode === 'prime_master') {
                 modeTitle.innerText = "Configure Prime Master";
                 diffSelect.options[0].text = "Easy (10-99)";
@@ -826,7 +837,13 @@ function updateLobbyUI(settings) {
                 diffSelect.options[0].text = "Easy";
                 diffSelect.options[1].text = "Normal";
                 diffSelect.options[2].text = "Hard";
+            } else if (settings.gameMode === 'binary_blitz') {
+                modeTitle.innerText = "Configure Binary Blitz";
+                diffSelect.options[0].text = "Easy (0-31)";
+                diffSelect.options[1].text = "Normal (0-255)";
+                diffSelect.options[2].text = "Hard (0-4095)";
             } else {
+                // Default: Root Rush
                 modeTitle.innerText = "Configure Root Rush";
                 diffSelect.options[0].text = "Easy (100-1k)";
                 diffSelect.options[1].text = "Normal (10k-1M)";
@@ -839,9 +856,9 @@ function updateLobbyUI(settings) {
             btnBackMode.style.display = 'none';
 
             // Update Header to "Game Mode:" for guest
-            const h2 = configModeName.parentElement;
-            if (h2.firstChild.nodeType === Node.TEXT_NODE) {
-                h2.firstChild.textContent = "Game Mode: ";
+            const configH2 = document.querySelector('#configuration-view h2');
+            if (configH2 && configH2.firstChild && configH2.firstChild.nodeType === Node.TEXT_NODE) {
+                configH2.firstChild.textContent = "Game Mode: ";
             }
 
             // Update Guest Preview Values
@@ -853,8 +870,13 @@ function updateLobbyUI(settings) {
                 if (settings.difficulty === 'easy') diffText += " (10-99)";
                 if (settings.difficulty === 'normal') diffText += " (100-500)";
                 if (settings.difficulty === 'hard') diffText += " (200-999)";
+                if (settings.difficulty === 'hard') diffText += " (200-999)";
             } else if (settings.gameMode === 'twenty_four') {
                 // No extra text needed for 24 game
+            } else if (settings.gameMode === 'binary_blitz') {
+                if (settings.difficulty === 'easy') diffText += " (0-31)";
+                if (settings.difficulty === 'normal') diffText += " (0-255)";
+                if (settings.difficulty === 'hard') diffText += " (0-4095)";
             } else {
                 if (settings.difficulty === 'easy') diffText += " (100-1k)";
                 if (settings.difficulty === 'normal') diffText += " (10k-1M)";
@@ -866,19 +888,29 @@ function updateLobbyUI(settings) {
 }
 
 // Host selects a mode
+// Host selects a mode
 document.getElementById('mode-card-root-rush').addEventListener('click', () => {
+    console.log("Clicked Root Rush");
     if (!isHost) return;
     socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'root_rush' } });
 });
 
 document.getElementById('mode-card-prime-master').addEventListener('click', () => {
+    console.log("Clicked Prime Master");
     if (!isHost) return;
     socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'prime_master' } });
 });
 
 document.getElementById('mode-card-twenty-four').addEventListener('click', () => {
+    console.log("Clicked Twenty Four");
     if (!isHost) return;
     socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'twenty_four', timePerRound: 30 } });
+});
+
+document.getElementById('mode-card-binary-blitz').addEventListener('click', () => {
+    console.log("Clicked Binary Blitz");
+    if (!isHost) return;
+    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'binary_blitz', timePerRound: 30 } });
 });
 
 // Host goes back
@@ -996,7 +1028,9 @@ const timerBar = document.getElementById('timer-bar');
 const feedbackContainer = document.getElementById('feedback-message');
 
 // Numeric Keypad Elements
+// Numeric & Binary Keypad Elements
 const numericKeypad = document.getElementById('numeric-keypad');
+const binaryKeypad = document.getElementById('binary-keypad');
 const btnToggleKeypad = document.getElementById('btn-toggle-keypad');
 const keypadButtons = document.querySelectorAll('.keypad-button');
 
@@ -1007,20 +1041,53 @@ function isMobileDevice() {
 
 // Initialize keypad visibility based on device
 function initializeKeypad() {
+    const isBinary = currentSettings && currentSettings.gameMode === 'binary_blitz';
+    const targetKeypad = isBinary ? binaryKeypad : numericKeypad;
+    const otherKeypad = isBinary ? numericKeypad : binaryKeypad;
+
+    // Always hide the "other" keypad to be safe
+    if (otherKeypad) otherKeypad.classList.remove('visible');
+    if (isBinary && binaryKeypad) binaryKeypad.style.display = 'grid';
+    // Note: binary keypad uses style.display='grid' in new_round vs 'visible' class toggling. 
+    // We should align this. Let's assume new_round handles the 'grid' display, 
+    // and this function handles the responsive 'visible' class if needed, 
+    // BUT binary keypad is currently set to display:grid in CSS by default (no, styles says display:grid).
+    // Actually, in index.html it has style="display: none;".
+    // AND in new_round we do `binaryKeypad.style.display = 'grid'`.
+
+    // For mobile, we generally want to show the keypad automatically.
     if (isMobileDevice()) {
-        numericKeypad.classList.add('visible');
+        if (isBinary) {
+            // Binary keypad is always shown in binary mode via new_round setting display:grid
+            // We don't use 'visible' class for it because it's not a popup like numericKeypad on desktop?
+            // Wait, numericKeypad has .visible { display: grid; } in CSS likely.
+            // Let's just ensure input state is correct.
+        } else {
+            numericKeypad.classList.add('visible');
+        }
+
         gameInput.setAttribute('readonly', 'readonly');
         gameInput.setAttribute('inputmode', 'none');
     } else {
-        numericKeypad.classList.remove('visible');
+        if (!isBinary) numericKeypad.classList.remove('visible');
         gameInput.removeAttribute('readonly');
         btnToggleKeypad.classList.remove('active');
     }
 }
 
 // Toggle keypad on desktop
+// Toggle keypad on desktop
 btnToggleKeypad.addEventListener('click', () => {
-    numericKeypad.classList.toggle('visible');
+    const isBinary = currentSettings && currentSettings.gameMode === 'binary_blitz';
+    // Binary keypad typically fixed, but if we want to toggle it:
+    if (isBinary) {
+        // For binary blitz, maybe we don't toggle? Or we toggle binaryKeypad?
+        // Since binaryKeypad is inline-grid in 'new_round', let's assume this button is mostly for numeric.
+        // But if user wants to type 0/1 on keyboard vs click.
+        // Let's just toggle numeric for now or both if active.
+    } else {
+        numericKeypad.classList.toggle('visible');
+    }
     btnToggleKeypad.classList.toggle('active');
 });
 
@@ -1217,17 +1284,48 @@ socket.on('new_round', (data) => {
 
         // Setup 24 Game UI
         initializeTwentyFourGame(data.question); // question is [n1, n2, n3, n4]
+    } else if (currentSettings.gameMode === 'binary_blitz') {
+        // Binary Blitz Mode
+        if (mathExp) {
+            mathExp.style.display = 'flex';
+            mathExp.style.visibility = 'visible';
+            // Remove radical sign if present, or just use question-number text
+            const radicalSpan = mathExp.querySelector('.radical');
+            if (radicalSpan) radicalSpan.style.display = 'none';
+        }
+
+        if (inputContainer) inputContainer.style.display = 'flex';
+
+        // Hide standard keypad, show binary
+        if (numericKeypad) numericKeypad.classList.remove('visible');
+        const binaryKeypad = document.getElementById('binary-keypad');
+        if (binaryKeypad) binaryKeypad.style.display = 'grid';
+
+        const optionsArea = document.getElementById('options-area');
+        if (optionsArea) optionsArea.style.display = 'none';
+        const tfArea = document.getElementById('twenty-four-area');
+        if (tfArea) tfArea.style.display = 'none';
+
+        questionNumber.parentElement.classList.remove('fade-in-up');
+        void questionNumber.offsetWidth; // Trigger reflow
+        questionNumber.innerText = data.question; // Decimal number
     } else {
         // Root Rush mode
         if (mathExp) {
             mathExp.style.display = 'flex';
             mathExp.style.visibility = 'visible';
+            const radicalSpan = mathExp.querySelector('.radical');
+            if (radicalSpan) radicalSpan.style.display = 'inline';
         }
         if (inputContainer) inputContainer.style.display = 'flex';
         const optionsArea = document.getElementById('options-area');
         if (optionsArea) optionsArea.style.display = 'none';
         const tfArea = document.getElementById('twenty-four-area');
         if (tfArea) tfArea.style.display = 'none';
+
+        // Hide binary keypad
+        const binaryKeypad = document.getElementById('binary-keypad');
+        if (binaryKeypad) binaryKeypad.style.display = 'none';
 
         // Restore keypad if mobile
         if (isMobileDevice()) {
@@ -1292,6 +1390,19 @@ gameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') submitAnswer();
 });
 
+// Restrict Input for Binary Blitz
+gameInput.addEventListener('input', (e) => {
+    if (currentSettings && currentSettings.gameMode === 'binary_blitz') {
+        // Remove any character that is not 0 or 1
+        const val = gameInput.value;
+        const cleanVal = val.replace(/[^01]/g, '');
+        if (val !== cleanVal) {
+            gameInput.value = cleanVal;
+            // Optionally shake or show brief error
+        }
+    }
+});
+
 socket.on('answer_feedback', (data) => {
     if (!data.correct) {
         feedbackContainer.innerText = "Wrong!";
@@ -1338,7 +1449,7 @@ socket.on('round_result', (data) => {
     // Check if I am a winner (must have answered and be 1st or tied for 1st)
     const isWinner = myResult && myResult.awarded > 0 && (myRank === 0 ||
         (data.isTie && myResult.diff === data.rankings[0].diff && data.mode === 'root_rush') ||
-        (data.isTie && myResult.time === data.rankings[0].time && (data.mode === 'prime_master' || data.mode === 'twenty_four')));
+        (data.isTie && myResult.time === data.rankings[0].time && (data.mode === 'prime_master' || data.mode === 'twenty_four' || data.mode === 'binary_blitz')));
 
     const isTie = !!data.isTie;
 
@@ -1420,7 +1531,7 @@ socket.on('round_result', (data) => {
             const extra = document.createElement('span');
             extra.className = 'answer-diff';
 
-            if (data.mode === 'prime_master' || data.mode === 'twenty_four') {
+            if (data.mode === 'prime_master' || data.mode === 'twenty_four' || data.mode === 'binary_blitz') {
                 // Show speed in seconds
                 if (r.time && r.time !== Infinity) {
                     const speed = ((r.time - data.startTime) / 1000).toFixed(2);

@@ -123,6 +123,13 @@
                                 <img src="assets/img/gamemodes/twenty-four.png" alt="Twenty Four" class="mode-icon-img">
                                 <span class="mode-name">Twenty Four</span>
                             </div>
+                            <div id="mode-card-binary-blitz" class="mode-card">
+                                <div class="mode-info-btn" data-mode="binary_blitz" title="How to play"><i
+                                        class="fa-solid fa-circle-info"></i></div>
+                                <img src="assets/img/gamemodes/binary-blitz.png" alt="Binary Blitz"
+                                    class="mode-icon-img">
+                                <span class="mode-name">Binary Blitz</span>
+                            </div>
                         </div>
                     </div>
 
@@ -260,6 +267,15 @@
                         <button class="keypad-button number" data-value="0">0</button>
                         <button class="keypad-button action" data-action="backspace"><i
                                 class="fa-solid fa-delete-left"></i></button>
+                    </div>
+
+                    <!-- Binary Keypad -->
+                    <div id="binary-keypad" class="binary-keypad" style="display: none;">
+                        <button class="keypad-button number binary-0" data-value="0">0</button>
+                        <button class="keypad-button number binary-1" data-value="1">1</button>
+                        <button class="keypad-button action" data-action="backspace"><i
+                                class="fa-solid fa-delete-left"></i></button>
+                        <button class="keypad-button action" data-action="clear">C</button>
                     </div>
 
                     <div id="feedback-message" class="feedback-message"></div>
