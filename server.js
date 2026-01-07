@@ -10,8 +10,9 @@ const io = new Server(server);
 
 // Load Game Modes
 const gameModes = {
-    'answer': require('./gamemodes/Answer'),
-    'prime_master': require('./gamemodes/PrimeMaster')
+    'root_rush': require('./gamemodes/RootRush'),
+    'prime_master': require('./gamemodes/PrimeMaster'),
+    'twenty_four': require('./gamemodes/TwentyFour')
 };
 
 // Serve static files from current directory
@@ -161,9 +162,9 @@ io.on('connection', (socket) => {
     // Game Logic Helpers
     // Helper to get current game mode logic
     function getGameMode(room) {
-        // Use the gameMode from settings, default to 'answer' if not set or invalid
-        const modeKey = (room.settings && room.settings.gameMode) ? room.settings.gameMode.toLowerCase() : 'answer';
-        return gameModes[modeKey] || gameModes['answer'];
+        // Use the gameMode from settings, default to 'root_rush' if not set or invalid
+        const modeKey = (room.settings && room.settings.gameMode) ? room.settings.gameMode.toLowerCase() : 'root_rush';
+        return gameModes[modeKey] || gameModes['root_rush'];
     }
 
     function concludeRound(roomId) {
@@ -347,6 +348,7 @@ io.on('connection', (socket) => {
                 room.users.splice(userIndex, 1);
 
                 socket.leave(roomId);
+                socket.explicitLeave = true; // Mark as explicit leave to skip grace period logic if disconnect follows immediately
 
                 io.to(roomId).emit('update_users', room.users);
                 io.to(roomId).emit('receive_message', { user: 'System', text: `${user.name} left the room.` });
@@ -366,6 +368,9 @@ io.on('connection', (socket) => {
 
     // Disconnect
     socket.on('disconnect', () => {
+        // Skip grace period if user explicitly left the room (e.g. clicked Exit)
+        if (socket.explicitLeave) return;
+
         // Grace period for reconnection (useful for mobile app switching)
         const DISCONNECT_GRACE_PERIOD = 40000; // 40 seconds
 

@@ -590,9 +590,8 @@ select:focus {
 }
 
 .mode-card img.mode-icon-img {
-    width: 50%;
-    /* Smaller image */
-    height: 50%;
+    width: 75%;
+    height: 75%;
     object-fit: contain;
     margin-bottom: 15px;
     pointer-events: none;
@@ -857,8 +856,8 @@ select:focus {
     }
 
     .mode-card img.mode-icon-img {
-        width: 45%;
-        height: 45%;
+        width: 65%;
+        height: 65%;
         margin-bottom: 10px;
     }
 
@@ -2405,5 +2404,334 @@ select:focus {
         font-size: 1.8rem;
         border-radius: 15px;
         min-height: 100px;
+    }
+}
+
+/* 24 Game Mode Styles */
+.twenty-four-area {
+    width: 100%;
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.tf-target-display {
+    font-size: 2.5rem;
+    color: var(--secondary-color);
+    font-weight: 700;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+    margin-bottom: 0.5rem;
+}
+
+.tf-equation-area {
+    width: 100%;
+    min-height: 80px;
+    background: rgba(223, 230, 233, 0.5);
+    border: 3px dashed #b2bec3;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 1rem;
+    gap: 0.5rem;
+    overflow-x: auto;
+    transition: all 0.3s ease;
+}
+
+.tf-equation-area.drag-over {
+    background: rgba(108, 92, 231, 0.1);
+    border-color: var(--primary);
+}
+
+.tf-placeholder {
+    color: #b2bec3;
+    font-size: 1.1rem;
+    pointer-events: none;
+    width: 100%;
+    text-align: center;
+    font-style: italic;
+    font-weight: 500;
+}
+
+.tf-hand-area,
+.tf-operator-area {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Ensure hand area has height to receive items back */
+.tf-hand-area {
+    min-height: 70px;
+    border-radius: 12px;
+    padding: 5px;
+    transition: background 0.2s;
+}
+
+.tf-tile {
+    width: 60px;
+    height: 60px;
+    background: white;
+    color: var(--primary);
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #dfe6e9;
+    border: 2px solid #dfe6e9;
+    transition: transform 0.1s, box-shadow 0.1s;
+    user-select: none;
+    position: relative;
+    z-index: 10;
+}
+
+.tf-tile.operator {
+    background: #f1f2f6;
+    color: var(--text);
+    box-shadow: 0 4px 0 #b2bec3;
+    border-color: #b2bec3;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+}
+
+.tf-tile:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #bdc3c7;
+}
+
+.tf-tile.number-tile {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 0 var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.tf-tile.number-tile:active {
+    box-shadow: 0 0 0 var(--primary-dark);
+}
+
+/* Being dragged */
+.tf-tile.dragging {
+    opacity: 0.5;
+    transform: scale(1.1);
+    z-index: 100;
+}
+
+.tf-controls {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+    justify-content: center;
+}
+
+/* Animations */
+@keyframes popIn {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+
+    80% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.tf-tile:not(.dragging) {
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+
+    .tf-hand-area,
+    .tf-operator-area {
+        gap: 8px;
+    }
+
+    .tf-tile {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+
+    .tf-tile.operator {
+        width: 45px;
+        height: 45px;
+        font-size: 1.3rem;
+    }
+
+    .tf-equation-area {
+        padding: 10px;
+        min-height: 70px;
+    }
+}
+
+/* Room Mode Badge */
+.room-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 4px 12px;
+    margin-left: 10px;
+    font-size: 1.2rem;
+    color: var(--primary);
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+}
+
+/* Mode Info Button */
+.mode-card {
+    position: relative;
+    /* Ensure absolute positioning works inside */
+}
+
+.mode-info-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: #ffffff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.2s, filter 0.2s;
+    background: #4fc3f7;
+    /* Light Blue */
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    /* 3D Effect: Brillo arriba (top highlight) + Sombra abajo (bottom shadow) + Drop shadow */
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+        0 4px 6px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.mode-info-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(0.9);
+}
+
+.mode-info-btn:active {
+    transform: translateY(1px);
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+        0 2px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Tutorial Modal */
+.tutorial-modal {
+    max-width: 600px;
+    width: 90%;
+}
+
+.tutorial-content {
+    text-align: left;
+    margin: 20px 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 10px;
+    /* Space for scrollbar */
+}
+
+.tutorial-content img {
+    width: 100%;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.tutorial-content h4 {
+    color: var(--primary);
+    margin-top: 15px;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+.tutorial-content p {
+    color: var(--text);
+    opacity: 0.8;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+}
+
+.tutorial-content ul {
+    color: var(--text);
+    opacity: 0.8;
+    margin-bottom: 15px;
+    padding-left: 20px;
+}
+
+.tutorial-content li {
+    margin-bottom: 5px;
+}
+
+/* Modal Base Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    /* Hidden by default via inline style, handled by JS */
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+    color: var(--text);
+}
+
+.modal-actions {
+    margin-top: 25px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+@keyframes modalPop {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
     }
 }

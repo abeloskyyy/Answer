@@ -73,11 +73,15 @@
             <div class="room-header">
                 <div class="room-info">
                     <h3>Room: <span id="current-room-code">XXXX</span></h3>
+
                     <div class="room-actions">
                         <button id="btn-copy-code" class="btn-icon" title="Copy Code"><i
                                 class="fa-solid fa-copy"></i></button>
                         <button id="btn-share-room" class="btn-icon" title="Share Room"><i
                                 class="fa-solid fa-share-nodes"></i></button>
+                    </div>
+                    <div class="room-mode-badge" id="room-mode-badge" style="display: none;">
+                        <span id="room-mode-display">Root Rush</span>
                     </div>
                 </div>
                 <button id="btn-leave-room" class="btn-danger">Exit</button>
@@ -101,14 +105,23 @@
                         <h2 class="section-title" style="font-size: 1.8rem;">Select Game Mode</h2>
                         <div class="mode-selection-area">
                             <div id="mode-card-root-rush" class="mode-card">
-                                <img src="https://cdn-icons-png.flaticon.com/512/4720/4720458.png" alt="Root Rush"
-                                    class="mode-icon-img">
+                                <div class="mode-info-btn" data-mode="root_rush" title="How to play"><i
+                                        class="fa-solid fa-circle-info"></i></div>
+                                <img src="assets/img/gamemodes/root-rush.png" alt="Root Rush" class="mode-icon-img">
                                 <span class="mode-name">Root Rush</span>
                             </div>
                             <div id="mode-card-prime-master" class="mode-card">
-                                <img src="https://cdn-icons-png.flaticon.com/512/10043/10043594.png" alt="Prime Master"
+                                <div class="mode-info-btn" data-mode="prime_master" title="How to play"><i
+                                        class="fa-solid fa-circle-info"></i></div>
+                                <img src="assets/img/gamemodes/prime-master.png" alt="Prime Master"
                                     class="mode-icon-img">
                                 <span class="mode-name">Prime Master</span>
+                            </div>
+                            <div id="mode-card-twenty-four" class="mode-card">
+                                <div class="mode-info-btn" data-mode="twenty_four" title="How to play"><i
+                                        class="fa-solid fa-circle-info"></i></div>
+                                <img src="assets/img/gamemodes/twenty-four.png" alt="Twenty Four" class="mode-icon-img">
+                                <span class="mode-name">Twenty Four</span>
                             </div>
                         </div>
                     </div>
@@ -119,7 +132,8 @@
                             <button id="btn-back-mode" class="btn-back-mode">
                                 <i class="fa-solid fa-arrow-left"></i>
                             </button>
-                            <h2 style="margin: 0; font-size: 1.5rem;">Configure Game</h2>
+                            <h2 style="margin: 0; font-size: 1.5rem;">Configure: <span id="config-mode-name"
+                                    style="color: var(--primary);">Game</span></h2>
                         </div>
 
                         <!-- Host Controls -->
@@ -186,6 +200,34 @@
 
                         <div id="options-area" class="options-grid" style="display: none;">
                             <!-- Option tiles will be injected here -->
+                        </div>
+
+                        <!-- Twenty Four Game Area -->
+                        <div id="twenty-four-area" class="twenty-four-area" style="display: none;">
+                            <div class="tf-target-display">Make 24!</div>
+
+                            <!-- Where the equation is built -->
+                            <div id="tf-equation-area" class="tf-equation-area">
+                                <div class="tf-placeholder">Drag numbers and operators here...</div>
+                            </div>
+
+                            <!-- Available numbers (Hand) -->
+                            <div id="tf-hand-area" class="tf-hand-area"></div>
+
+                            <!-- Operators -->
+                            <div id="tf-operator-area" class="tf-operator-area">
+                                <div class="tf-tile operator" data-val="+">+</div>
+                                <div class="tf-tile operator" data-val="-">−</div>
+                                <div class="tf-tile operator" data-val="*">×</div>
+                                <div class="tf-tile operator" data-val="/">÷</div>
+                                <div class="tf-tile operator" data-val="(">(</div>
+                                <div class="tf-tile operator" data-val=")">)</div>
+                            </div>
+
+                            <div class="tf-controls">
+                                <button id="btn-tf-clear" class="btn-secondary">Clear</button>
+                                <button id="btn-tf-submit" class="btn-primary">Submit</button>
+                            </div>
                         </div>
 
                         <!-- Start Countdown Overlay -->
@@ -323,6 +365,19 @@
         </div>
 
         <!-- Socket.io -->
+        <!-- Tutorial Modal -->
+        <div id="tutorial-modal-overlay" class="modal-overlay" style="display: none;">
+            <div class="modal-content tutorial-modal">
+                <h3 id="tutorial-title">How to Play</h3>
+                <div id="tutorial-content" class="tutorial-content">
+                    <!-- Content injected via JS -->
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-close-tutorial" class="btn-primary">Got it!</button>
+                </div>
+            </div>
+        </div>
+
         <script src="/socket.io/socket.io.js"></script>
         <script src="scripts.js"></script>
 </body>

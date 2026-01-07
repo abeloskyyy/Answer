@@ -498,6 +498,10 @@ const btnBackMode = document.getElementById('btn-back-mode');
 const guestModeMsg = document.getElementById('guest-mode-msg');
 const modeCards = document.querySelectorAll('.mode-card');
 
+const configModeName = document.getElementById('config-mode-name');
+const roomModeBadge = document.getElementById('room-mode-badge');
+const roomModeDisplay = document.getElementById('room-mode-display');
+
 const roundsInput = document.getElementById('rounds-input');
 const timeInput = document.getElementById('time-input');
 const difficultyInput = document.getElementById('difficulty-input');
@@ -597,7 +601,77 @@ btnLogin.addEventListener('click', () => {
     }
 });
 
-// 2. Create Room
+// 2. Create Room (Logic continues...)
+
+// Tutorial Logic
+const tutorialModalOverlay = document.getElementById('tutorial-modal-overlay');
+const btnCloseTutorial = document.getElementById('btn-close-tutorial');
+const tutorialTitle = document.getElementById('tutorial-title');
+const tutorialContent = document.getElementById('tutorial-content');
+
+const tutorials = {
+    'root_rush': {
+        title: 'How to Play: Root Rush',
+        html: `
+            <p><strong>Goal:</strong> Calculate the square root of the number shown.</p>
+            <p><strong>Gameplay:</strong></p>
+            <ul>
+                <li>A number will appear (e.g., 144).</li>
+                <li>Type the square root (e.g., 12) as fast as you can.</li>
+                <li>The faster you answer, the more points you get!</li>
+            </ul>
+        `
+    },
+    'prime_master': {
+        title: 'How to Play: Prime Master',
+        html: `
+            <p><strong>Goal:</strong> Select the prime number of four possible answers.</p>
+            <p><strong>Gameplay:</strong></p>
+            <ul>
+                <li>Four numbers will appear.</li>
+                <li>Click the prime number as fast as you can.</li>
+                <li>Answer faster than the other players to score points!</li>
+            </ul>
+        `
+    },
+    'twenty_four': {
+        title: 'How to Play: Twenty Four',
+        html: `
+            <p><strong>Goal:</strong> Make the number 24 using 4 numbers.</p>
+            <p><strong>Gameplay:</strong></p>
+            <ul>
+                <li>You are given four numbers (e.g., 4, 7, 8, 8).</li>
+                <li>Use addition (+), subtraction (-), multiplication (*), and division (/) to reach exactly 24.</li>
+                <li>Use any combination attempting to get 24.</li>
+                <li>Example: (8 - 4) * (8 - 2) = 24</li>
+            </ul>
+        `
+    }
+};
+
+document.querySelectorAll('.mode-info-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent clicking the card behind it
+        const mode = btn.getAttribute('data-mode');
+        const content = tutorials[mode];
+
+        if (content) {
+            tutorialTitle.innerText = content.title;
+            tutorialContent.innerHTML = content.html;
+            tutorialModalOverlay.style.display = 'flex';
+        }
+    });
+});
+
+btnCloseTutorial.addEventListener('click', () => {
+    tutorialModalOverlay.style.display = 'none';
+});
+
+tutorialModalOverlay.addEventListener('click', (e) => {
+    if (e.target === tutorialModalOverlay) {
+        tutorialModalOverlay.style.display = 'none';
+    }
+});
 btnCreateRoom.addEventListener('click', () => {
     btnCreateRoom.disabled = true; // Prevent button spam
     socket.emit('create_room', { username: myUsername, avatar: myAvatar });
@@ -713,21 +787,45 @@ function updateLobbyUI(settings) {
             configurationView.style.display = 'flex'; // It's a flex column
             configurationView.style.flexDirection = 'column';
         }
+        // Update Config Header / Room Badge (Common)
+        const niceName = settings.gameMode.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        configModeName.innerText = niceName;
+        roomModeDisplay.innerText = niceName;
+        roomModeBadge.style.display = 'inline-flex';
 
         if (isHost) {
             hostControls.style.display = 'block';
             guestControls.style.display = 'none';
             btnBackMode.style.display = 'block';
 
+            // Reset header text to "Configure:" for host
+            const configH2 = document.querySelector('#configuration-view h2');
+            if (configH2 && configH2.firstChild.textContent.trim() !== "Configure:") {
+                configH2.innerHTML = `Configure: <span id="config-mode-name" style="color: var(--primary);">${niceName}</span>`;
+                // We replaced innerHTML, so we need to re-bind the span reference if we use the variable later? 
+                // The variable 'configModeName' holds reference to the OLD span if we replace innerHTML. 
+                // Better to just change the text node.
+            }
+            // Actually, easier way:
+            const h2 = configModeName.parentElement;
+            // We know structure is H2 -> [Text "Configure: "] [Span]
+            if (h2.firstChild.nodeType === Node.TEXT_NODE) {
+                h2.firstChild.textContent = "Configure: ";
+            }
+
             // MODE-SPECIFIC CONFIGURATION UI (HOST)
             const diffSelect = document.getElementById('difficulty-input');
             const modeTitle = document.querySelector('#configuration-view h2');
-
             if (settings.gameMode === 'prime_master') {
                 modeTitle.innerText = "Configure Prime Master";
                 diffSelect.options[0].text = "Easy (10-99)";
                 diffSelect.options[1].text = "Normal (100-500)";
                 diffSelect.options[2].text = "Hard (200-999)";
+            } else if (settings.gameMode === 'twenty_four') {
+                modeTitle.innerText = "Configure Twenty Four";
+                diffSelect.options[0].text = "Easy";
+                diffSelect.options[1].text = "Normal";
+                diffSelect.options[2].text = "Hard";
             } else {
                 modeTitle.innerText = "Configure Root Rush";
                 diffSelect.options[0].text = "Easy (100-1k)";
@@ -735,9 +833,16 @@ function updateLobbyUI(settings) {
                 diffSelect.options[2].text = "Hard (1M-100M)";
             }
         } else {
-            hostControls.style.display = 'none';
+            // GUEST VIEW CONFIG
             guestControls.style.display = 'block';
-            btnBackMode.style.display = 'none'; // Guests can't go back
+            hostControls.style.display = 'none';
+            btnBackMode.style.display = 'none';
+
+            // Update Header to "Game Mode:" for guest
+            const h2 = configModeName.parentElement;
+            if (h2.firstChild.nodeType === Node.TEXT_NODE) {
+                h2.firstChild.textContent = "Game Mode: ";
+            }
 
             // Update Guest Preview Values
             pRounds.innerText = `${settings.rounds} Rounds`;
@@ -748,6 +853,8 @@ function updateLobbyUI(settings) {
                 if (settings.difficulty === 'easy') diffText += " (10-99)";
                 if (settings.difficulty === 'normal') diffText += " (100-500)";
                 if (settings.difficulty === 'hard') diffText += " (200-999)";
+            } else if (settings.gameMode === 'twenty_four') {
+                // No extra text needed for 24 game
             } else {
                 if (settings.difficulty === 'easy') diffText += " (100-1k)";
                 if (settings.difficulty === 'normal') diffText += " (10k-1M)";
@@ -761,12 +868,17 @@ function updateLobbyUI(settings) {
 // Host selects a mode
 document.getElementById('mode-card-root-rush').addEventListener('click', () => {
     if (!isHost) return;
-    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'answer' } });
+    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'root_rush' } });
 });
 
 document.getElementById('mode-card-prime-master').addEventListener('click', () => {
     if (!isHost) return;
     socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'prime_master' } });
+});
+
+document.getElementById('mode-card-twenty-four').addEventListener('click', () => {
+    if (!isHost) return;
+    socket.emit('update_settings', { roomId: currentRoomId, settings: { gameMode: 'twenty_four', timePerRound: 30 } });
 });
 
 // Host goes back
@@ -1090,8 +1202,23 @@ socket.on('new_round', (data) => {
             };
             optionsArea.appendChild(tile);
         });
+    } else if (currentSettings.gameMode === 'twenty_four') {
+        const tfArea = document.getElementById('twenty-four-area');
+        tfArea.style.display = 'flex';
+
+        // Hide others
+        if (mathExp) mathExp.style.display = 'none';
+        if (inputContainer) inputContainer.style.display = 'none';
+        if (numericKeypad) numericKeypad.classList.remove('visible');
+        const optionsArea = document.getElementById('options-area');
+        if (optionsArea) optionsArea.style.display = 'none';
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (waitingOverlay) waitingOverlay.style.display = 'none';
+
+        // Setup 24 Game UI
+        initializeTwentyFourGame(data.question); // question is [n1, n2, n3, n4]
     } else {
-        // Root Rush (Answer) mode
+        // Root Rush mode
         if (mathExp) {
             mathExp.style.display = 'flex';
             mathExp.style.visibility = 'visible';
@@ -1099,6 +1226,8 @@ socket.on('new_round', (data) => {
         if (inputContainer) inputContainer.style.display = 'flex';
         const optionsArea = document.getElementById('options-area');
         if (optionsArea) optionsArea.style.display = 'none';
+        const tfArea = document.getElementById('twenty-four-area');
+        if (tfArea) tfArea.style.display = 'none';
 
         // Restore keypad if mobile
         if (isMobileDevice()) {
@@ -1207,7 +1336,9 @@ socket.on('round_result', (data) => {
     const myRank = data.rankings.indexOf(myResult);
 
     // Check if I am a winner (must have answered and be 1st or tied for 1st)
-    const isWinner = myResult && myResult.awarded > 0 && (myRank === 0 || (data.isTie && myResult.diff === data.rankings[0].diff && data.mode === 'answer') || (data.isTie && myResult.time === data.rankings[0].time && data.mode === 'prime_master'));
+    const isWinner = myResult && myResult.awarded > 0 && (myRank === 0 ||
+        (data.isTie && myResult.diff === data.rankings[0].diff && data.mode === 'root_rush') ||
+        (data.isTie && myResult.time === data.rankings[0].time && (data.mode === 'prime_master' || data.mode === 'twenty_four')));
 
     const isTie = !!data.isTie;
 
@@ -1289,7 +1420,7 @@ socket.on('round_result', (data) => {
             const extra = document.createElement('span');
             extra.className = 'answer-diff';
 
-            if (data.mode === 'prime_master') {
+            if (data.mode === 'prime_master' || data.mode === 'twenty_four') {
                 // Show speed in seconds
                 if (r.time && r.time !== Infinity) {
                     const speed = ((r.time - data.startTime) / 1000).toFixed(2);
@@ -1300,6 +1431,15 @@ socket.on('round_result', (data) => {
             } else {
                 // Show difference
                 extra.innerText = (r.diff !== null && r.diff !== undefined && r.diff !== Infinity) ? `±${r.diff}` : '-';
+            }
+
+            // For 24 game, render formatting if correct
+            if (data.mode === 'twenty_four' && r.diff === 0) {
+                // show the formula instead of the plain number answer if available
+                if (r.answer && typeof r.answer === 'string') {
+                    // r.answer comes as "3+4+5+6 = 24" from backend
+                    answer.innerText = r.answer.replace(' = 24', '');
+                }
             }
 
             playerDetails.appendChild(answer);
@@ -1598,8 +1738,210 @@ socket.on('error', (msg) => {
 socket.on('kicked', () => {
     stopAllSounds();
     currentRoomId = null; // Prevent beforeunload prompt
-    showModal('Disconnected', 'You have been kicked from the room by the host.', () => {
-        location.reload();
-    });
+    window.location.reload();
 });
+
+// ==========================================
+// 24 GAME LOGIC
+// ==========================================
+function initializeTwentyFourGame(numbers) {
+    const handArea = document.getElementById('tf-hand-area');
+    const equationArea = document.getElementById('tf-equation-area');
+    const operatorArea = document.getElementById('tf-operator-area');
+
+    handArea.innerHTML = '';
+    equationArea.innerHTML = '<div class="tf-placeholder">Make 24! Click or drag numbers/operators.</div>';
+
+    // Clear operators selection state if any
+
+    // Create Number Tiles
+    numbers.forEach((num, index) => {
+        const tile = createTfTile(num, 'number', index);
+        handArea.appendChild(tile);
+    });
+
+    // Re-attach listeners to static operators (if lost or just ensuring)
+    const operators = operatorArea.querySelectorAll('.tf-tile.operator');
+    operators.forEach(op => {
+        // Clone to remove old listeners
+        const newOp = op.cloneNode(true);
+        op.parentNode.replaceChild(newOp, op);
+
+        newOp.addEventListener('click', () => {
+            moveTileToEquation(newOp.cloneNode(true));
+        });
+
+        // Draggable for operators?
+        // Let's make copies draggable
+        newOp.setAttribute('draggable', 'true');
+        newOp.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                val: newOp.getAttribute('data-val'),
+                type: 'operator'
+            }));
+            newOp.classList.add('dragging');
+        });
+        newOp.addEventListener('dragend', () => {
+            newOp.classList.remove('dragging');
+        });
+    });
+
+    // Equation Area Drop Zone
+    equationArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        equationArea.classList.add('drag-over');
+    });
+
+    equationArea.addEventListener('dragleave', () => {
+        equationArea.classList.remove('drag-over');
+    });
+
+    equationArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        equationArea.classList.remove('drag-over');
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+
+        if (data.type === 'number') {
+            // Find the original tile in hand or moved
+            const originalId = `tf-num-${data.index}`;
+            const original = document.getElementById(originalId);
+            if (original && original.parentElement === handArea) {
+                moveTileToEquation(original);
+            }
+        } else if (data.type === 'operator') {
+            // Create new operator tile
+            const newOp = document.createElement('div');
+            newOp.className = 'tf-tile operator';
+            newOp.innerText = data.val === '*' ? '×' : (data.val === '/' ? '÷' : data.val);
+            newOp.setAttribute('data-val', data.val);
+            moveTileToEquation(newOp);
+        }
+    });
+
+    // Clear Button
+    document.getElementById('btn-tf-clear').onclick = () => {
+        // Move all numbers back to hand
+        const nums = equationArea.querySelectorAll('.tf-tile.number-tile');
+        nums.forEach(n => {
+            handArea.appendChild(n);
+        });
+        // Remove operators
+        const ops = equationArea.querySelectorAll('.tf-tile.operator');
+        ops.forEach(o => o.remove());
+
+        checkPlaceholder();
+    };
+
+    // Submit Button
+    document.getElementById('btn-tf-submit').onclick = () => {
+        submitTwentyFourAnswer();
+    };
+}
+
+function createTfTile(val, type, index) {
+    const tile = document.createElement('div');
+    tile.className = `tf-tile ${type === 'number' ? 'number-tile' : 'operator'}`;
+    tile.innerText = val;
+    if (type === 'number') {
+        tile.id = `tf-num-${index}`;
+        tile.setAttribute('data-index', index);
+        tile.setAttribute('data-val', val);
+    } else {
+        tile.setAttribute('data-val', val);
+    }
+
+    tile.setAttribute('draggable', 'true');
+
+    // Click Handler
+    tile.addEventListener('click', () => {
+        if (tile.parentElement.id === 'tf-hand-area') {
+            moveTileToEquation(tile);
+        } else if (tile.parentElement.id === 'tf-equation-area') {
+            if (type === 'number') {
+                document.getElementById('tf-hand-area').appendChild(tile);
+            } else {
+                tile.remove();
+            }
+            checkPlaceholder();
+        }
+    });
+
+    // Drag start
+    tile.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+            val: val,
+            type: type,
+            index: index
+        }));
+        tile.classList.add('dragging');
+    });
+
+    tile.addEventListener('dragend', () => {
+        tile.classList.remove('dragging');
+    });
+
+    return tile;
+}
+
+function moveTileToEquation(tile) {
+    const equationArea = document.getElementById('tf-equation-area');
+    const placeholder = equationArea.querySelector('.tf-placeholder');
+    if (placeholder) placeholder.remove();
+
+    equationArea.appendChild(tile);
+
+    // Ensure the tile being moved has the 'return' click behavior
+    // If it was a clone (operator), it needs a listener
+    // If it was an existing node (number), it keeps its listener but logic branches on parentElement
+
+    // If it's a new operator clone, we need to add the click-to-remove listener
+    if (tile.classList.contains('operator') && !tile.onclick) {
+        tile.onclick = () => {
+            tile.remove();
+            checkPlaceholder();
+        };
+    }
+}
+
+function checkPlaceholder() {
+    const equationArea = document.getElementById('tf-equation-area');
+    if (equationArea.children.length === 0) {
+        equationArea.innerHTML = '<div class="tf-placeholder">Drag numbers and operators here...</div>';
+    }
+}
+
+function submitTwentyFourAnswer() {
+    const equationArea = document.getElementById('tf-equation-area');
+    const tiles = Array.from(equationArea.children);
+
+    if (tiles.some(t => t.classList.contains('tf-placeholder'))) {
+        showModal('Error', 'Please build an expression first!');
+        return;
+    }
+
+    let expression = '';
+    tiles.forEach(tile => {
+        const val = tile.getAttribute('data-val');
+        expression += val;
+    });
+
+    console.log("Submitting:", expression);
+
+    // Optional: Local validation of 4 numbers used?
+    // We can let server handle it or give fast feedback.
+    // Let's rely on server for robust logic, but could check count locally.
+    // Optional: Local validation
+    // We used to check numsUsed < 4, but user requested allowing subsets.
+    const numsUsed = tiles.filter(t => t.classList.contains('number-tile')).length;
+    if (numsUsed === 0) {
+        showModal('Hint', 'You must use at least one number!');
+        return;
+    }
+
+    socket.emit('submit_answer', { roomId: currentRoomId, answer: expression });
+
+    const waitingOverlay = document.getElementById('waiting-overlay');
+    if (waitingOverlay) waitingOverlay.style.display = 'flex';
+}
+
 

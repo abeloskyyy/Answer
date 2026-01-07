@@ -15,7 +15,7 @@ module.exports = {
         const answer = Math.floor(Math.sqrt(num));
 
         // Log for debugging
-        console.log(`Answer Mode: Generated sqrt(${num}) = ~${answer}`);
+        console.log(`Root Rush Mode: Generated sqrt(${num}) = ~${answer}`);
 
         return { question: num, answer: answer };
     },
@@ -92,7 +92,7 @@ module.exports = {
             correctAnswer: correctAnswer,
             rankings: results,
             isTie: isTie,
-            mode: 'answer'
+            mode: 'root_rush'
         };
     }
 };
