@@ -23,13 +23,19 @@ socket.on('connect', () => {
     reconnectAttempts = 0;
     hideReconnectingMessage();
 
+    // Emit login to ensure server knows our UUID (for reconnecting mobile users)
+    if (myUsername && myUUID) {
+        socket.emit('login', { name: myUsername, uuid: myUUID });
+    }
+
     // If we were in a room, try to rejoin
     if (currentRoomId && myUsername) {
         console.log('Attempting to rejoin room:', currentRoomId);
         socket.emit('join_room', {
             username: myUsername,
             roomId: currentRoomId,
-            avatar: myAvatar
+            avatar: myAvatar,
+            uuid: myUUID
         });
     }
 });
@@ -75,6 +81,317 @@ function showReconnectingMessage() {
         document.body.appendChild(reconnectMsg);
     }
     reconnectMsg.style.display = 'block';
+}
+
+// FRIENDS SYSTEM LOGIC (Appended)
+
+const searchFriendInput = document.getElementById('search-friend-input');
+const btnSendFriendRequest = document.getElementById('btn-send-friend-request');
+const addFriendFeedback = document.getElementById('add-friend-feedback');
+const reqBadge = document.getElementById('req-badge');
+const requestsListContainer = document.getElementById('requests-list-container');
+const friendsListContainer = document.getElementById('friends-list-container');
+
+// Send Request
+if (btnSendFriendRequest) {
+    btnSendFriendRequest.addEventListener('click', async () => {
+        const targetUsername = searchFriendInput.value.trim();
+        if (!targetUsername) return;
+
+        if (targetUsername.toLowerCase() === (currentUser.displayName || '').toLowerCase()) {
+            showFeedback(addFriendFeedback, 'You cannot add yourself.', 'error');
+            return;
+        }
+
+        addFriendFeedback.textContent = 'Searching...';
+        try {
+            // 1. Find User by Username (Case insensitive ideally, but exact for now)
+            const querySnapshot = await db.collection('users')
+                .where('usernameLower', '==', targetUsername.toLowerCase())
+                .limit(1)
+                .get();
+
+            if (querySnapshot.empty) {
+                showFeedback(addFriendFeedback, 'User not found.', 'error');
+                return;
+            }
+
+            const targetUserDoc = querySnapshot.docs[0];
+            const targetUserData = targetUserDoc.data();
+
+            // 2. Send Request
+            await db.collection('friend_requests').add({
+                from: currentUser.uid,
+                fromName: currentUser.displayName,
+                fromPhoto: currentUser.photoURL,
+                to: targetUserData.uid,
+                status: 'pending',
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            showFeedback(addFriendFeedback, `Request sent to ${targetUserData.username}!`, 'success');
+            searchFriendInput.value = '';
+
+        } catch (error) {
+            console.error('Error sending request:', error);
+            showFeedback(addFriendFeedback, 'Error sending request.', 'error');
+        }
+    });
+}
+
+function showFeedback(el, msg, type) {
+    el.textContent = msg;
+    el.className = `feedback-msg ${type}`;
+    setTimeout(() => {
+        el.textContent = '';
+        el.className = 'feedback-msg';
+    }, 3000);
+}
+
+// Listen for Incoming Requests
+let requestsUnsubscribe = null;
+function listenForFriendRequests() {
+    if (!currentUser) return Promise.resolve();
+    if (requestsUnsubscribe) requestsUnsubscribe(); // Clear prev
+
+    return new Promise((resolve) => {
+        let firstLoad = true;
+        requestsUnsubscribe = db.collection('friend_requests')
+            .where('to', '==', currentUser.uid)
+            .where('status', '==', 'pending')
+            .onSnapshot(async (snapshot) => {
+                const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                await updateRequestsUI(requests);
+                if (firstLoad) {
+                    firstLoad = false;
+                    resolve();
+                }
+            }, (error) => {
+                console.error("Requests listener error:", error);
+                resolve(); // Don't block loading on error
+            });
+    });
+}
+
+async function updateRequestsUI(requests) {
+    const gBadge = document.getElementById('global-req-badge');
+    if (reqBadge) {
+        reqBadge.textContent = requests.length;
+        reqBadge.style.display = requests.length > 0 ? 'inline-block' : 'none';
+    }
+    if (gBadge) {
+        gBadge.textContent = requests.length;
+        gBadge.style.display = requests.length > 0 ? 'inline-block' : 'none';
+    }
+
+    if (requestsListContainer) {
+        requestsListContainer.innerHTML = '';
+        if (requests.length === 0) {
+            requestsListContainer.innerHTML = '<p class="empty-state">No pending requests.</p>';
+            return;
+        }
+
+        // Fetch fresh details for requesters
+        const requestsWithDetails = await Promise.all(requests.map(async (req) => {
+            try {
+                const userDoc = await db.collection('users').doc(req.from).get();
+                if (userDoc.exists) {
+                    return { ...req, ...userDoc.data() };
+                }
+                return req;
+            } catch (e) {
+                return req;
+            }
+        }));
+
+        requestsWithDetails.forEach(req => {
+            const item = document.createElement('div');
+            item.className = 'friend-item';
+            item.innerHTML = `
+                <img src="assets/img/user-img/${req.photoURL || 'avatar_1.png'}" class="friend-avatar">
+                <div class="friend-info">
+                    <span class="friend-name">${req.username || req.fromName}</span>
+                    <span class="friend-status">Wants to be friends</span>
+                </div>
+                <div class="request-actions">
+                    <button class="btn-accept" title="Accept"><i class="fa-solid fa-check"></i></button>
+                    <button class="btn-decline" title="Decline"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `;
+
+            // Actions
+            item.querySelector('.btn-accept').addEventListener('click', () => acceptRequest(req));
+            item.querySelector('.btn-decline').addEventListener('click', () => declineRequest(req.id));
+
+            requestsListContainer.appendChild(item);
+        });
+    }
+}
+
+// Accept Request
+async function acceptRequest(req) {
+    try {
+        const batch = db.batch();
+
+        // 1. Add to My Friends
+        const myFriendRef = db.collection('users').doc(currentUser.uid).collection('friends').doc(req.from);
+        batch.set(myFriendRef, {
+            uid: req.from,
+            username: req.fromName, // Ideally fetch fresh, but this is ok
+            photoURL: req.fromPhoto,
+            since: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 2. Add Me to Their Friends
+        const theirFriendRef = db.collection('users').doc(req.from).collection('friends').doc(currentUser.uid);
+        batch.set(theirFriendRef, {
+            uid: currentUser.uid,
+            username: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+            since: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 3. Delete Request
+        const reqRef = db.collection('friend_requests').doc(req.id);
+        batch.delete(reqRef);
+
+        await batch.commit();
+        console.log('Friend request accepted!');
+    } catch (e) {
+        console.error('Error accepting friend:', e);
+    }
+}
+
+async function declineRequest(reqId) {
+    try {
+        await db.collection('friend_requests').doc(reqId).delete();
+    } catch (e) { console.error(e); }
+}
+
+// Listen for My Friends
+let friendsUnsubscribe = null;
+function listenForFriends() {
+    if (!currentUser) return Promise.resolve();
+    if (friendsUnsubscribe) friendsUnsubscribe();
+
+    return new Promise((resolve) => {
+        let firstLoad = true;
+        friendsUnsubscribe = db.collection('users').doc(currentUser.uid).collection('friends')
+            .onSnapshot(async snapshot => {
+                const friends = snapshot.docs.map(doc => doc.data());
+                await updateFriendsListUI(friends);
+                if (firstLoad) {
+                    firstLoad = false;
+                    resolve();
+                }
+            }, (error) => {
+                console.error("Friends listener error:", error);
+                resolve();
+            });
+    });
+}
+
+let friendDetailUnsubscribers = [];
+let lastFriendsList = []; // Store for auto-refresh
+async function updateFriendsListUI(friends) {
+    lastFriendsList = friends;
+    // Clear previous detail listeners to avoid memory leaks/multisync
+    friendDetailUnsubscribers.forEach(unsub => unsub());
+    friendDetailUnsubscribers = [];
+
+    // Update Count Indicators
+    const count = friends.length;
+    const mainCount = document.getElementById('main-friends-count');
+    const tabCount = document.getElementById('tab-friends-count');
+    const summaryCount = document.getElementById('friends-count-summary');
+
+    if (mainCount) mainCount.textContent = count > 0 ? `(${count})` : '';
+    if (tabCount) tabCount.textContent = count > 0 ? `(${count})` : '';
+    if (summaryCount) summaryCount.textContent = count === 1 ? 'You have 1 friend' : `You have ${count} friends`;
+
+    if (friendsListContainer) {
+        friendsListContainer.innerHTML = '';
+        if (friends.length === 0) {
+            friendsListContainer.innerHTML = '<p class="empty-state">No friends yet. Add some!</p>';
+            return;
+        }
+
+        // For each friend, create a container and listen to their global user doc
+        friends.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'friend-item';
+            item.id = `friend-item-${f.uid}`;
+            friendsListContainer.appendChild(item);
+
+            const unsub = db.collection('users').doc(f.uid).onSnapshot(doc => {
+                if (!doc.exists) return;
+                const data = doc.data();
+                renderFriendItem(item, data, f.uid);
+            });
+            friendDetailUnsubscribers.push(unsub);
+        });
+    }
+}
+
+// Helper to render friend item (used by real-time listener and auto-refresh)
+function renderFriendItem(container, data, friendUid) {
+    let statusText = 'Offline';
+    let statusClass = '';
+
+    const now = new Date();
+    const lastActiveDate = data.lastActive?.toDate() || new Date(0);
+    const diffSec = Math.floor((now - lastActiveDate) / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+
+    // 1. Determine if they are Online/Away
+    if (data.isOnline && diffSec < 90) {
+        statusText = 'Online';
+        statusClass = 'online';
+    } else if (data.isOnline && diffSec < 300) {
+        statusText = 'Away';
+    }
+    // 2. If not Online/Away, show "Last seen"
+    else if (data.lastActive) {
+        if (diffMin < 1) statusText = 'Last seen: Just now';
+        else if (diffMin < 60) statusText = `Last seen: ${diffMin}m ago`;
+        else if (diffMin < 1440) statusText = `Last seen: ${Math.floor(diffMin / 60)}h ago`;
+        else statusText = `Last seen: ${lastActiveDate.toLocaleDateString()}`;
+    }
+
+    container.innerHTML = `
+        <img src="assets/img/user-img/${data.photoURL || 'avatar_1.png'}" class="friend-avatar ${statusClass}">
+        <div class="friend-info">
+            <span class="friend-name">${data.username}</span>
+            <span class="friend-status ${statusClass}">${statusText}</span> 
+        </div>
+        <button class="btn-icon-small btn-remove-friend" title="Remove Friend"><i class="fa-solid fa-user-minus"></i></button>
+    `;
+
+    container.querySelector('.btn-remove-friend').onclick = () => {
+        showModal(
+            'Remove Friend',
+            `Are you sure you want to remove <strong>${data.username}</strong> from your friends list?`,
+            () => removeFriend(friendUid),
+            () => { },
+            'Yes, remove',
+            'No'
+        );
+    };
+}
+
+// Auto-refresh UI every 30s to update "Last seen" and Online status without snapshot
+setInterval(() => {
+    // No logic needed here yet, snapshot handles most updates
+}, 30000);
+
+async function removeFriend(friendUid) {
+    // Remove from both sides
+    try {
+        const batch = db.batch();
+        batch.delete(db.collection('users').doc(currentUser.uid).collection('friends').doc(friendUid));
+        batch.delete(db.collection('users').doc(friendUid).collection('friends').doc(currentUser.uid));
+        await batch.commit();
+    } catch (e) { console.error(e); }
 }
 
 function hideReconnectingMessage() {
@@ -333,7 +650,14 @@ function stopAllSounds() {
 }
 
 // Stop sounds on page refresh/close
-window.addEventListener('beforeunload', () => {
+window.addEventListener('beforeunload', (e) => {
+    if (currentRoomId) {
+        e.preventDefault();
+        e.returnValue = "Are you sure you want to leave the game?";
+    }
+    if (currentUser) {
+        setOffline();
+    }
     stopAllSounds();
 });
 
@@ -394,18 +718,313 @@ function createMathBackground() {
 
 createMathBackground();
 
+const db = firebase.firestore();
+
+// Sync User to Firestore for Searchability & Online Status
+let heartbeatInterval = null;
+async function syncUserToDB(user) {
+    if (!user) {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        return;
+    }
+
+    const performSync = async (isOnline = true) => {
+        try {
+            await db.collection('users').doc(user.uid).set({
+                uid: user.uid,
+                username: user.displayName || 'Unknown',
+                usernameLower: (user.displayName || '').toLowerCase(), // For search
+                photoURL: user.photoURL || 'avatar_1.png',
+                lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+                isOnline: isOnline
+            }, { merge: true });
+            console.log(`User synced to Firestore (isOnline: ${isOnline})`);
+        } catch (e) {
+            console.error('Error syncing user to DB:', e);
+        }
+    };
+
+    // Initial sync
+    await performSync(true);
+
+    // Setup heartbeat every 30 seconds for higher accuracy
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => performSync(true), 30000);
+}
+
+async function setOffline() {
+    if (currentUser) {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        try {
+            await db.collection('users').doc(currentUser.uid).update({
+                isOnline: false,
+                lastActive: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log('User set to offline');
+        } catch (e) {
+            console.error('Error setting offline:', e);
+        }
+    }
+}
+
 // State
-let myUsername = '';
+let myUsername = 'Guest';
 let myAvatar = 'avatar_1.png'; // Default
 let currentRoomId = '';
+let currentUser = null; // Firebase User
+let isHost = false;
+let currentSettings = {}; // Cache for instant UI updates
+let myUUID = generateUUID(); // Initial Guest UUID
 
-// DOM Elements
+// Helper to generate random UUID for guests
+function generateUUID() {
+    // If crypto.randomUUID is available (Modern Browsers)
+    if (crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    // Fallback
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// ==========================================
+// FRIEND INVITE SYSTEM
+// ==========================================
+
+const btnInviteFriend = document.getElementById('btn-invite-friend');
+const inviteFriendsModalOverlay = document.getElementById('invite-friends-modal-overlay');
+const btnCloseInviteFriends = document.getElementById('btn-close-invite-friends');
+const inviteListOnline = document.getElementById('invite-list-online');
+const inviteListOffline = document.getElementById('invite-list-offline');
+
+// Incoming Invite Elements
+const incomingInviteModalOverlay = document.getElementById('incoming-invite-modal-overlay');
+const inviterAvatar = document.getElementById('inviter-avatar');
+const inviterName = document.getElementById('inviter-name');
+const btnAcceptInvite = document.getElementById('btn-accept-invite');
+const btnDeclineInvite = document.getElementById('btn-decline-invite');
+
+let currentInviteData = null; // Store pending invite data
+
+// Open Invite Modal
+let inviteRefreshInterval = null;
+if (btnInviteFriend) {
+    btnInviteFriend.addEventListener('click', () => {
+        if (!currentRoomId) return; // Can only invite if in a room
+        inviteFriendsModalOverlay.style.display = 'flex';
+        renderInviteList();
+
+        // Auto-refresh invite list every 5 seconds while modal is open
+        if (inviteRefreshInterval) clearInterval(inviteRefreshInterval);
+        inviteRefreshInterval = setInterval(() => {
+            if (inviteFriendsModalOverlay.style.display === 'flex') {
+                renderInviteList();
+            } else {
+                clearInterval(inviteRefreshInterval);
+                inviteRefreshInterval = null;
+            }
+        }, 5000);
+    });
+}
+
+// Close Invite Modal
+if (btnCloseInviteFriends) {
+    btnCloseInviteFriends.addEventListener('click', () => {
+        inviteFriendsModalOverlay.style.display = 'none';
+        if (inviteRefreshInterval) {
+            clearInterval(inviteRefreshInterval);
+            inviteRefreshInterval = null;
+        }
+    });
+}
+
+async function renderInviteList() {
+    inviteListOnline.innerHTML = '';
+    inviteListOffline.innerHTML = '';
+
+    if (!lastFriendsList || lastFriendsList.length === 0) {
+        inviteListOffline.innerHTML = '<p class="empty-state">No friends to invite.</p>';
+        return;
+    }
+
+    // Fetch fresh data for each friend to get current online status
+    const friendsWithStatus = await Promise.all(lastFriendsList.map(async (friend) => {
+        try {
+            const userDoc = await db.collection('users').doc(friend.uid).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                return {
+                    ...friend,
+                    isOnline: userData.isOnline,
+                    lastActive: userData.lastActive,
+                    photoURL: userData.photoURL || friend.photoURL,
+                    username: userData.username || friend.username
+                };
+            }
+            return friend;
+        } catch (error) {
+            console.error('Error fetching friend data:', error);
+            return friend;
+        }
+    }));
+
+    friendsWithStatus.forEach(friend => {
+        // Calculate status - EXACT same logic as main friend list (renderFriendItem)
+        const now = new Date();
+        const lastActiveDate = friend.lastActive?.toDate() || new Date(0);
+        const diffSec = Math.floor((now - lastActiveDate) / 1000);
+
+        // Match main friends list: Online = isOnline flag AND active within 90 seconds
+        const isOnline = friend.isOnline && diffSec < 90;
+
+        console.log(`Friend ${friend.username}: isOnline=${friend.isOnline}, diffSec=${diffSec}, calculated=${isOnline}`);
+
+        const container = isOnline ? inviteListOnline : inviteListOffline;
+
+        const item = document.createElement('div');
+        item.className = 'invite-friend-item';
+        item.innerHTML = `
+            <img src="assets/img/user-img/${friend.photoURL || 'avatar_1.png'}" class="friend-avatar ${isOnline ? 'online' : ''}">
+            <div class="friend-info">
+                <span class="friend-name">${friend.username}</span>
+                <span class="friend-status ${isOnline ? 'online' : ''}">${isOnline ? 'Online' : 'Offline'}</span>
+            </div>
+            <button class="btn-invite-action" data-uid="${friend.uid}">Invite</button>
+        `;
+
+        const btnInvite = item.querySelector('.btn-invite-action');
+        btnInvite.addEventListener('click', () => {
+            sendInvite(friend.uid, btnInvite);
+        });
+
+        container.appendChild(item);
+    });
+
+    if (inviteListOnline.children.length === 0) {
+        inviteListOnline.innerHTML = '<p class="empty-state" style="padding:10px;">No friends online.</p>';
+    }
+
+    if (inviteListOffline.children.length === 0) {
+        inviteListOffline.innerHTML = '<p class="empty-state" style="padding:10px;">No offline friends.</p>';
+    }
+}
+
+function sendInvite(targetUid, btn) {
+    if (!currentRoomId || !currentUser) return;
+
+    console.log('Sending invite to:', targetUid, 'Room:', currentRoomId);
+
+    // UI Feedback
+    btn.textContent = 'Sent';
+    btn.disabled = true;
+    btn.style.background = '#2ecc71';
+
+    socket.emit('invite_friend', {
+        targetUid: targetUid,
+        roomId: currentRoomId,
+        hostName: currentUser.displayName,
+        hostAvatar: currentUser.photoURL || 'avatar_1.png'
+    });
+
+    // Reset button after delay?
+    setTimeout(() => {
+        if (btn && btn.textContent === 'Sent') {
+            btn.textContent = 'Invite';
+            btn.disabled = false;
+            btn.style.background = '';
+        }
+    }, 5000);
+}
+
+socket.on('invite_result', (data) => {
+    console.log('Invite result received:', data);
+    // Find the button that was clicked? Or just use generic feedback?
+    // We don't have a direct ref to the button here easily unless we store it or query by uid
+    // But we can query by data-uid
+    const btn = document.querySelector(`.btn-invite-action[data-uid="${data.targetUid}"]`);
+    if (btn) {
+        if (data.success) {
+            btn.textContent = 'Sent';
+            btn.style.background = '#2ecc71';
+        } else {
+            btn.textContent = 'Offline';
+            btn.style.background = '#95a5a6';
+            setTimeout(() => {
+                btn.textContent = 'Invite';
+                btn.disabled = false;
+                btn.style.background = '';
+            }, 3000);
+        }
+    }
+});
+
+// Socket: Receive Invite
+socket.on('receive_invite', (data) => {
+    console.log('Received invite from:', data.hostName, 'Room:', data.roomId);
+    // If I'm already in a room (and it's not the same room), show alert? 
+    // Or just show modal regardless.
+    // If I am in the same room, ignore.
+    if (currentRoomId === data.roomId) return;
+
+    currentInviteData = data;
+
+    inviterName.textContent = data.hostName;
+    inviterAvatar.src = `assets/img/user-img/${data.hostAvatar}`;
+    incomingInviteModalOverlay.style.display = 'flex';
+
+    // Play notification sound
+    playSFX(sfxClick); // Reusing click for now or add new sound
+});
+
+// Accept Invite
+if (btnAcceptInvite) {
+    btnAcceptInvite.addEventListener('click', () => {
+        if (currentInviteData) {
+            // Leave current room if any
+            if (currentRoomId) {
+                socket.emit('leave_room', currentRoomId);
+                currentRoomId = '';
+                // UI update handles in leave_room/join logic
+            }
+
+            // Join new room
+            socket.emit('join_room', {
+                username: myUsername,
+                roomId: currentInviteData.roomId,
+                avatar: myAvatar,
+                uuid: myUUID
+            });
+
+            // UI Transitions handled by 'room_joined' socket event in main logic
+            incomingInviteModalOverlay.style.display = 'none';
+        }
+    });
+}
+
+// Decline Invite
+if (btnDeclineInvite) {
+    btnDeclineInvite.addEventListener('click', () => {
+        incomingInviteModalOverlay.style.display = 'none';
+        currentInviteData = null;
+    });
+}
 const loginSection = document.getElementById('login-section');
 const lobbySection = document.getElementById('lobby-section');
 const roomSection = document.getElementById('room-section');
 
+// Login Views
+const guestLoginView = document.getElementById('guest-login-view');
+const userProfileView = document.getElementById('user-profile-view');
+const userDisplayName = document.getElementById('user-display-name');
+const btnPlayAuth = document.getElementById('btn-play-auth');
+const btnLogout = document.getElementById('btn-logout');
+const btnAccountSettings = document.getElementById('btn-account-settings');
+
 const usernameInput = document.getElementById('username');
 const btnLogin = document.getElementById('btn-login');
+const btnBackToLogin = document.getElementById('btn-back-to-login');
 
 const btnCreateRoom = document.getElementById('btn-create-room');
 const btnJoinRoom = document.getElementById('btn-join-room');
@@ -464,9 +1083,12 @@ const modalBtnCancel = document.getElementById('modal-btn-cancel');
 let currentModalConfirm = null;
 let currentModalCancel = null;
 
-function showModal(title, message, onConfirm = null, onCancel = null) {
+function showModal(title, message, onConfirm = null, onCancel = null, confirmText = 'OK', cancelText = 'Cancel') {
     modalTitle.innerText = title;
     modalMessage.innerHTML = message;
+
+    modalBtnConfirm.innerText = confirmText;
+    modalBtnCancel.innerText = cancelText;
 
     // Reset display
     modalBtnCancel.style.display = onCancel ? 'inline-block' : 'none';
@@ -513,10 +1135,6 @@ const pRounds = document.getElementById('p-rounds');
 const pTime = document.getElementById('p-time');
 const pDifficulty = document.getElementById('p-difficulty');
 
-// State
-let isHost = false;
-let currentSettings = {}; // Cache for instant UI updates
-
 // Navigation
 function switchScreen(screenId) {
     const currentScreen = document.querySelector('.screen.active');
@@ -560,6 +1178,13 @@ avatarSelectorBtn.addEventListener('click', (e) => {
 avatarOptions.forEach(opt => {
     opt.addEventListener('click', () => {
         const src = opt.getAttribute('data-src');
+
+        // Restriction: Guests can only use avatar_1.png
+        if (!currentUser && src !== 'avatar_1.png') {
+            showModal('Premium Feature', 'Please <b>Login</b> or <b>Sign Up</b> to unlock all avatars!');
+            return;
+        }
+
         myAvatar = src;
 
         // Update Preview
@@ -571,6 +1196,18 @@ avatarOptions.forEach(opt => {
 
         // Close Dropdown
         avatarDropdown.classList.remove('active');
+
+        // Sync with Firebase if logged in
+        if (currentUser) {
+            currentUser.updateProfile({
+                photoURL: myAvatar
+            }).then(() => {
+                console.log('Avatar synced to Firebase');
+                syncUserToDB(currentUser); // Persist to Firestore Users
+            }).catch(err => {
+                console.error('Error syncing avatar:', err);
+            });
+        }
     });
 });
 
@@ -582,7 +1219,8 @@ document.addEventListener('click', (e) => {
 });
 
 // 1. Login
-btnLogin.addEventListener('click', () => {
+// 1. Login Logic
+function handleGuestLogin() {
     const name = usernameInput.value.trim();
     if (name) {
         btnLogin.disabled = true; // Prevent double click
@@ -593,11 +1231,437 @@ btnLogin.addEventListener('click', () => {
         localStorage.setItem('username', name);
         localStorage.setItem('avatar', myAvatar);
 
-        // Login event only logs on server, but we can pass avatar if we want server to know early
-        socket.emit('login', name);
+        // Emit login event to server to verify connection and track UUID
+        // We use the Firebase UID as the unique identifier for the server to map sockets
+        socket.emit('login', { name: myUsername, uuid: myUUID });
         switchScreen('lobby-section');
     } else {
         showModal('Error', 'Please enter a username!');
+    }
+}
+
+// Back to Login Logic
+if (btnBackToLogin) {
+    btnBackToLogin.addEventListener('click', () => {
+        switchScreen('login-section');
+    });
+}
+
+btnLogin.addEventListener('click', handleGuestLogin);
+
+// =========================
+// AUTHENTICATION LOGIC
+// =========================
+const authModalOverlay = document.getElementById('auth-modal-overlay');
+const btnOpenAuth = document.getElementById('btn-open-auth');
+const btnCloseAuth = document.getElementById('btn-close-auth');
+const authTabs = document.querySelectorAll('#auth-modal-overlay .auth-tab');
+const authForms = document.querySelectorAll('#auth-modal-overlay .auth-form');
+const btnGoogleLogin = document.getElementById('btn-google-login');
+const formLogin = document.getElementById('form-login');
+const formRegister = document.getElementById('form-register');
+const authErrorMsg = document.getElementById('auth-error-msg');
+
+// Modal Control
+btnOpenAuth.addEventListener('click', () => {
+    authModalOverlay.style.display = 'flex';
+    authErrorMsg.style.display = 'none';
+});
+
+btnCloseAuth.addEventListener('click', () => {
+    authModalOverlay.style.display = 'none';
+});
+
+authModalOverlay.addEventListener('click', (e) => {
+    if (e.target === authModalOverlay) {
+        authModalOverlay.style.display = 'none';
+    }
+});
+
+// Tab Switching
+authTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        authTabs.forEach(t => t.classList.remove('active'));
+        authForms.forEach(f => f.classList.remove('active'));
+
+        tab.classList.add('active');
+        const targetId = `auth-form-${tab.dataset.tab}`;
+        document.getElementById(targetId).classList.add('active');
+        authErrorMsg.style.display = 'none';
+    });
+});
+
+// Helper: Show Auth Error
+function showAuthError(msg) {
+    authErrorMsg.textContent = msg;
+    authErrorMsg.style.display = 'block';
+}
+
+// 1. Google Login & Register (Same logic)
+const btnGoogleRegister = document.getElementById('btn-google-register');
+
+function handleGoogleSign() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider)
+        .then((result) => {
+            // User signed in
+            console.log('Google Sign In Success:', result.user);
+            authModalOverlay.style.display = 'none';
+            // Auth watcher will handle the rest
+        })
+        .catch((error) => {
+            console.error(error);
+            showAuthError(error.message);
+        });
+}
+
+btnGoogleLogin.addEventListener('click', handleGoogleSign);
+btnGoogleRegister.addEventListener('click', handleGoogleSign);
+
+// 2. Email Login
+formLogin.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            console.log('Login Success:', userCredential.user);
+            authModalOverlay.style.display = 'none';
+        })
+        .catch((error) => {
+            showAuthError(error.message);
+        });
+});
+
+// 3. Register
+formRegister.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+
+    if (!username) {
+        showAuthError("Please enter a username");
+        return;
+    }
+
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // Update Profile with Username
+            userCredential.user.updateProfile({
+                displayName: username,
+                photoURL: myAvatar // default generic
+            }).then(() => {
+                console.log('Registration Success');
+                authModalOverlay.style.display = 'none';
+                // Force UI update since observer might fire before profile update?
+                // Actually observer fires on sign-in, updateProfile might need reload to reflect?
+                // We'll handle it in onAuthStateChanged if possible, or force it here.
+                myUsername = username;
+                usernameInput.value = username;
+            });
+        })
+        .catch((error) => {
+            showAuthError(error.message);
+        });
+});
+
+// 4. Auth State Observer
+auth.onAuthStateChanged(async (user) => {
+    updateLoginUI(user);
+    if (user) {
+        currentUser = user;
+        myUUID = user.uid; // Use Firebase UID
+        syncUserToDB(user); // Sync Profile for Search
+        console.log('User is logged in:', user.displayName, 'UUID:', myUUID);
+
+        // Start Listening for Friend Requests & Friends - WAIT for initial load
+        await Promise.all([
+            listenForFriendRequests(),
+            listenForFriends()
+        ]);
+
+        // Auto-fill Data
+        if (user.displayName) {
+            myUsername = user.displayName;
+            usernameInput.value = myUsername;
+            userDisplayName.textContent = myUsername;
+        }
+
+        // IMPORTANT: Emit login to server with real Firebase UID
+        // This ensures server has correct UID mapping even if socket reconnected before auth completed
+        console.log('Firebase auth completed. myUsername:', myUsername, 'myUUID:', myUUID, 'socket.connected:', socket.connected);
+        if (socket.connected) {
+            socket.emit('login', { name: myUsername, uuid: myUUID });
+            console.log('✓ Emitted login to server with Firebase UID:', myUUID);
+        } else {
+            console.warn('⚠ Socket not connected yet, login will be emitted on connect');
+        }
+
+        // Avatar Logic
+        let avatarToUse = user.photoURL;
+
+        // Force internal avatar system: If URL is external (Google) or missing, use default
+        if (!avatarToUse || avatarToUse.startsWith('http')) {
+            avatarToUse = 'avatar_1.png';
+            console.log('Normalizing avatar to internal system:', avatarToUse);
+
+            // Persist the override to Firebase
+            user.updateProfile({ photoURL: avatarToUse }).catch(err => console.error('Error normalizing avatar:', err));
+        }
+
+        myAvatar = avatarToUse;
+        console.log('Final Avatar:', myAvatar);
+
+        // Update Preview Image (in settings)
+        const avatarPreview = document.getElementById('selected-avatar-preview');
+        if (avatarPreview) {
+            avatarPreview.src = `assets/img/user-img/${myAvatar}`;
+        }
+
+        // Update Dropdown Selection
+        const avatarOptions = document.querySelectorAll('.avatar-option');
+        avatarOptions.forEach(opt => {
+            opt.classList.remove('selected');
+            const img = opt.querySelector('img');
+            if (img && img.src.includes(myAvatar)) {
+                opt.classList.add('selected');
+            }
+        });
+    } else {
+        if (currentUser) {
+            // If we HAD a user but now don't, set them offline
+            setOffline();
+        }
+        currentUser = null;
+        console.log('User is signed out');
+        myUUID = generateUUID(); // Generate new guest UUID
+        updateLoginUI(null);
+    }
+
+    // Hide loading screen once auth state AND initial data are resolved
+    const loadingScreen = document.getElementById('initial-loading-screen');
+    if (loadingScreen && !loadingScreen.classList.contains('fade-out')) {
+        loadingScreen.classList.add('fade-out');
+        setTimeout(() => loadingScreen.style.display = 'none', 500); // Remove from flow
+    }
+});
+
+function updateLoginUI(user) {
+    console.log('Updating UI for user:', user ? user.email : 'Guest');
+
+    // Update Avatar Locks: Lock all except avatar_1 for guests
+    const avatarOptions = document.querySelectorAll('.avatar-option');
+    console.log('Checking avatar locks. Found options:', avatarOptions.length, 'User:', user ? 'Logged In' : 'Guest');
+
+    avatarOptions.forEach(opt => {
+        const src = opt.getAttribute('data-src');
+        if (!user && src !== 'avatar_1.png') {
+            opt.classList.add('locked');
+            // Force style check for debug
+            // opt.style.border = '2px solid red'; 
+        } else {
+            opt.classList.remove('locked');
+            // opt.style.border = '';
+        }
+    });
+
+    if (user) {
+        if (guestLoginView) guestLoginView.style.display = 'none';
+        if (userProfileView) userProfileView.style.display = 'block';
+        if (userDisplayName) userDisplayName.style.display = 'block'; // Show Username
+
+        // Align header to start when logged in (Avatar + Name)
+        const header = document.querySelector('.profile-header-unified');
+        if (header) header.style.justifyContent = 'flex-start';
+
+    } else {
+        if (guestLoginView) guestLoginView.style.display = 'block';
+        if (userProfileView) userProfileView.style.display = 'none';
+        if (userDisplayName) userDisplayName.style.display = 'none'; // Hide Username for guests
+
+        // Center avatar for guests
+        const header = document.querySelector('.profile-header-unified');
+        if (header) header.style.justifyContent = 'center';
+    }
+}
+
+// 5. Authenticated Play Button
+btnPlayAuth.addEventListener('click', () => {
+    // Just proceed to lobby, user data is already set
+    socket.emit('login', { name: myUsername, uuid: myUUID });
+    switchScreen('lobby-section');
+});
+
+// 6. Logout
+btnLogout.addEventListener('click', async () => {
+    await setOffline();
+    auth.signOut().then(() => {
+        showModal('Signed Out', 'You have been signed out successfully.', () => {
+            location.reload();
+        });
+    });
+});
+
+
+// 7. Account Settings Modal Logic
+const settingsModalOverlay = document.getElementById('settings-modal-overlay');
+const btnCloseSettings = document.getElementById('btn-close-settings');
+const btnSaveSettings = document.getElementById('btn-save-settings');
+const settingsUsernameInput = document.getElementById('settings-username');
+const btnDeleteAccount = document.getElementById('btn-delete-account'); // New
+const btnViewStats = document.getElementById('btn-view-stats'); // New
+
+// Stats Modal Elements
+const statsModalOverlay = document.getElementById('stats-modal-overlay');
+const btnCloseStats = document.getElementById('btn-close-stats');
+const statGames = document.getElementById('stat-games');
+const statWins = document.getElementById('stat-wins');
+const statScore = document.getElementById('stat-score');
+
+btnAccountSettings.addEventListener('click', () => {
+    if (currentUser) {
+        settingsUsernameInput.value = currentUser.displayName || '';
+        settingsModalOverlay.style.display = 'flex';
+    }
+});
+
+btnCloseSettings.addEventListener('click', () => {
+    settingsModalOverlay.style.display = 'none';
+});
+
+settingsModalOverlay.addEventListener('click', (e) => {
+    if (e.target === settingsModalOverlay) {
+        settingsModalOverlay.style.display = 'none';
+    }
+});
+
+// View Stats
+btnViewStats.addEventListener('click', () => {
+    settingsModalOverlay.style.display = 'none'; // Close settings
+    statsModalOverlay.style.display = 'flex';
+
+    // Load Stats (From LocalStorage for now, keyed by UUID)
+    // In a real app with Firestore, we would fetch() here.
+    const savedStats = JSON.parse(localStorage.getItem(`stats_${myUUID}`)) || { games: 0, wins: 0, score: 0 };
+    statGames.textContent = savedStats.games;
+    statWins.textContent = savedStats.wins;
+    statScore.textContent = savedStats.score;
+});
+
+btnCloseStats.addEventListener('click', () => {
+    statsModalOverlay.style.display = 'none';
+});
+
+// Friends Modal
+const btnFriends = document.getElementById('btn-friends');
+const friendsModalOverlay = document.getElementById('friends-modal-overlay');
+const btnCloseFriends = document.getElementById('btn-close-friends');
+
+btnFriends.addEventListener('click', () => {
+    friendsModalOverlay.style.display = 'flex';
+});
+
+btnCloseFriends.addEventListener('click', () => {
+    friendsModalOverlay.style.display = 'none';
+});
+
+friendsModalOverlay.addEventListener('click', (e) => {
+    if (e.target === friendsModalOverlay) {
+        friendsModalOverlay.style.display = 'none';
+    }
+});
+
+// Friends Modal Tabs Logic
+const friendTabs = document.querySelectorAll('#friends-modal-overlay .auth-tab');
+friendTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        // Remove active class from all tabs
+        friendTabs.forEach(t => t.classList.remove('active'));
+        // Hide all contents
+        const allContents = document.querySelectorAll('#friends-modal-overlay .auth-form');
+        allContents.forEach(c => c.style.display = 'none');
+
+        // Activate clicked tab
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-tab');
+        const targetContent = document.getElementById(targetId);
+        if (targetContent) {
+            targetContent.style.display = 'block';
+            // If opening My Friends or Requests, we should trigger a refresh (later)
+        }
+    });
+});
+
+// Delete Account
+btnDeleteAccount.addEventListener('click', () => {
+    showModal(
+        'Delete Account',
+        'Are you sure you want to permanently delete your account? This cannot be undone.',
+        () => {
+            // Confirm Logic
+            if (currentUser) {
+                currentUser.delete().then(() => {
+                    console.log('Account deleted');
+                    settingsModalOverlay.style.display = 'none';
+
+                    // Explicitly sign out and reload
+                    auth.signOut().then(() => {
+                        showModal('Account Deleted', 'Your account has been deleted permanently.', () => {
+                            location.reload();
+                        });
+                    });
+
+                }).catch(error => {
+                    console.error(error);
+                    if (error.code === 'auth/requires-recent-login') {
+                        showModal('Security Check', 'Please sign out and sign in again to delete your account.');
+                    } else {
+                        showModal('Error', 'Could not delete account: ' + error.message);
+                    }
+                });
+            }
+        },
+        () => {
+            // Cancel Logic - Do nothing, modal closes automatically
+        }
+    );
+});
+
+// Save Settings (Username)
+btnSaveSettings.addEventListener('click', () => {
+    const newName = settingsUsernameInput.value.trim();
+    if (newName && currentUser) {
+        if (newName === currentUser.displayName) {
+            settingsModalOverlay.style.display = 'none';
+            return;
+        }
+
+        // Update Firebase
+        currentUser.updateProfile({
+            displayName: newName
+        }).then(() => {
+            console.log('Username updated');
+
+            // Update Local State
+            myUsername = newName;
+            userDisplayName.textContent = newName;
+            usernameInput.value = newName;
+
+            // Sync to Firestore Users collection so friends see updated name
+            syncUserToDB(currentUser);
+
+            // Feedback
+            settingsModalOverlay.style.display = 'none';
+            showModal('Success', 'Username updated successfully!');
+
+        }).catch(err => {
+            console.error(err);
+            showModal('Error', 'Failed to update username.');
+        });
+    } else {
+        showModal('Error', 'Username cannot be empty.');
     }
 });
 
@@ -678,6 +1742,17 @@ document.querySelectorAll('.mode-info-btn').forEach(btn => {
 
 btnCloseTutorial.addEventListener('click', () => {
     tutorialModalOverlay.style.display = 'none';
+});
+
+// Info button in Configuration Header
+document.getElementById('btn-config-info').addEventListener('click', () => {
+    const mode = currentSettings.gameMode;
+    const content = tutorials[mode];
+    if (content) {
+        tutorialTitle.innerText = content.title;
+        tutorialContent.innerHTML = content.html;
+        tutorialModalOverlay.style.display = 'flex';
+    }
 });
 
 tutorialModalOverlay.addEventListener('click', (e) => {
@@ -783,15 +1858,17 @@ function updateLobbyUI(settings) {
         if (isHost) {
             // Host sees clickable cards
             guestModeMsg.style.display = 'none';
-            // Enable pointer events on cards
+            // Ensure cards are fully active
             document.querySelectorAll('.mode-card').forEach(c => {
-                c.style.pointerEvents = 'auto';
+                c.classList.remove('guest-view');
             });
         } else {
             // Guest sees "Waiting for host..."
             guestModeMsg.style.display = 'block';
-            // Disable clicks
-            document.querySelectorAll('.mode-card').forEach(c => c.style.pointerEvents = 'none');
+            // Make cards look interactive for info, but don't blocking clicks
+            document.querySelectorAll('.mode-card').forEach(c => {
+                c.classList.add('guest-view');
+            });
         }
     } else {
         // Configuration Phase
@@ -1219,6 +2296,18 @@ socket.on('new_round', (data) => {
     setTimeout(() => {
         countdownOverlay.style.display = 'none';
     }, 600);
+
+    // Update Instructions
+    const instructionEl = document.getElementById('game-instruction');
+    if (instructionEl) {
+        let text = "";
+        const mode = currentSettings.gameMode;
+        if (mode === 'root_rush') text = "Estimate the result of this square root!";
+        else if (mode === 'prime_master') text = "Find the prime number faster than other players!";
+        else if (mode === 'twenty_four') text = "Use the numbers and operators to make exactly 24!";
+        else if (mode === 'binary_blitz') text = "Quick! Be the fastest player to convert this decimal to binary!";
+        instructionEl.innerText = text;
+    }
 
     // 1. Update info
     // 2. Show correct UI based on mode

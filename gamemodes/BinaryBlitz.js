@@ -1,7 +1,7 @@
 module.exports = {
     // Generate a new question
     generateQuestion: (difficulty) => {
-        // Easy: 0-15 (4 bits)
+        // Easy: 0-31 (5 bits)
         // Normal: 0-255 (8 bits)
         // Hard: 0-4095 (12 bits)
 

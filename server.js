@@ -22,6 +22,8 @@ app.use(express.static(__dirname));
 const rooms = {};
 const roomTimers = new Map(); // Store room game timers: roomId -> timeout/interval
 const disconnectTimeouts = new Map(); // Store user disconnect timeouts: socketId -> timeout
+const connectedUsers = new Map(); // Maps firebase UID -> socket.id for direct messaging
+
 
 // API to list background music files
 app.get('/api/music', (req, res) => {
@@ -44,18 +46,37 @@ function generateRoomId() {
 io.on('connection', (socket) => {
     // console.log(`User connected: (${socket.id})`);
 
-    socket.on('login', (name) => {
-        console.log(`User connected: ${name} (${socket.id})`);
+    socket.on('login', (data) => {
+        const name = typeof data === 'object' ? data.name : data;
+        const uuid = typeof data === 'object' ? data.uuid : 'guest-' + socket.id;
+
+        // If it's a real user (not guest UUID pattern or has explicit isGuest flag logic if we had it), track them
+        // For now, we trust the client sends their Auth UID as 'uuid' or a separate field if we want.
+        // Based on scripts.js plan, we will send { name: ..., uuid: currentUser.uid }
+
+        if (uuid && !uuid.startsWith('guest-')) {
+            connectedUsers.set(uuid, socket.id);
+            console.log(`Registered user ${name} [${uuid}] -> Socket ${socket.id}`);
+            console.log(`Total connected users: ${connectedUsers.size}`);
+        }
+
+        console.log(`User connected: ${name} (${socket.id}) [UUID: ${uuid}]`);
     });
 
     // Create Room
     socket.on('create_room', (data) => {
-        const { username, avatar } = data;
+        const { username, avatar, uuid } = data;
         const roomId = generateRoomId();
         rooms[roomId] = {
             id: roomId,
             host: socket.id, // Track the host
-            users: [{ id: socket.id, name: username, avatar: avatar || 'avatar_1.png', score: 0 }],
+            users: [{
+                id: socket.id,
+                uuid: uuid || 'guest-' + socket.id,
+                name: username,
+                avatar: avatar || 'avatar_1.png',
+                score: 0
+            }],
             gameState: 'waiting', // waiting, playing, finished
             settings: {
                 gameMode: null, // null = mode selection, 'root_rush' = config
@@ -78,7 +99,7 @@ io.on('connection', (socket) => {
 
     // Join Room
     socket.on('join_room', (data) => {
-        const { username, roomId, avatar } = data;
+        const { username, roomId, avatar, uuid } = data;
         const room = rooms[roomId];
 
         if (room) {
@@ -124,7 +145,13 @@ io.on('connection', (socket) => {
                 }
 
                 // New user joining
-                room.users.push({ id: socket.id, name: username, avatar: avatar || 'avatar_1.png', score: 0 });
+                room.users.push({
+                    id: socket.id,
+                    uuid: uuid || 'guest-' + socket.id,
+                    name: username,
+                    avatar: avatar || 'avatar_1.png',
+                    score: 0
+                });
                 socket.join(roomId);
                 socket.emit('room_joined', roomId);
 
@@ -303,6 +330,30 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Invite Friend
+    socket.on('invite_friend', (data) => {
+        const { targetUid, roomId, hostName, hostAvatar } = data;
+        const targetSocketId = connectedUsers.get(targetUid);
+
+        console.log(`Invite attempt: ${hostName} -> ${targetUid} for room ${roomId}`);
+        console.log(`Target socket ID: ${targetSocketId || 'NOT FOUND'}`);
+        console.log(`Connected users map:`, Array.from(connectedUsers.entries()));
+
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('receive_invite', {
+                roomId: roomId,
+                hostName: hostName,
+                hostAvatar: hostAvatar
+            });
+            // Confirm to sender
+            socket.emit('invite_result', { success: true, targetUid: targetUid });
+            console.log(`✓ Invite sent successfully to ${targetUid}`);
+        } else {
+            console.log(`✗ Failed to invite ${targetUid}: User not connected. Connected Users: ${connectedUsers.size}`);
+            socket.emit('invite_result', { success: false, targetUid: targetUid, reason: 'offline' });
+        }
+    });
+
     // Kick Player (Host Only)
     socket.on('kick_player', (data) => {
         const { roomId, targetId } = data;
@@ -426,6 +477,15 @@ io.on('connection', (socket) => {
                 }, DISCONNECT_GRACE_PERIOD);
 
                 disconnectTimeouts.set(socket.id, timeout);
+                break;
+            }
+        }
+
+        // Remove from connectedUsers global map
+        for (const [uid, sid] of connectedUsers.entries()) {
+            if (sid === socket.id) {
+                connectedUsers.delete(uid);
+                console.log(`Removed local mapping for ${uid}`);
                 break;
             }
         }
