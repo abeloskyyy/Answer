@@ -142,9 +142,16 @@
         <!-- Room Section -->
         <div id="room-section" class="screen">
             <div class="room-header">
-                <div class="room-info">
-                    <h3>Room: <span id="current-room-code">XXXX</span></h3>
+                <div class="room-header-row room-header-top">
+                    <div class="room-info">
+                        <h3>Room: <span id="current-room-code">XXXX</span></h3>
+                    </div>
+                    <div class="room-mode-badge" id="room-mode-badge" style="display: none;">
+                        <span id="room-mode-display">Root Rush</span>
+                    </div>
+                </div>
 
+                <div class="room-header-row room-header-bottom">
                     <div class="room-actions">
                         <button id="btn-copy-code" class="btn-icon" title="Copy Code"><i
                                 class="fa-solid fa-copy"></i></button>
@@ -154,11 +161,8 @@
                         <button id="btn-share-room" class="btn-icon" title="Share Room"><i
                                 class="fa-solid fa-share-nodes"></i></button>
                     </div>
-                    <div class="room-mode-badge" id="room-mode-badge" style="display: none;">
-                        <span id="room-mode-display">Root Rush</span>
-                    </div>
+                    <button id="btn-leave-room" class="btn-danger">Exit</button>
                 </div>
-                <button id="btn-leave-room" class="btn-danger">Exit</button>
             </div>
 
             <div class="game-area">
@@ -651,6 +655,24 @@
                     <div id="invite-list-offline" class="friends-list-container">
                         <!-- Items injected here -->
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Prompt Modal -->
+        <div id="notification-prompt-overlay" class="modal-overlay" style="display: none;">
+            <div class="modal-content auth-modal" style="max-width: 400px; padding: 30px; text-align: center;">
+                <div class="notification-icon-container"
+                    style="font-size: 3rem; color: var(--primary); margin-bottom: 20px;">
+                    <i class="fa-solid fa-bell-concierge"></i>
+                </div>
+                <h3 style="color: var(--primary); margin-bottom: 15px;">Enable Notifications?</h3>
+                <p style="color: #636e72; line-height: 1.5; margin-bottom: 25px;">
+                    Stay updated! Get notified when your friends send you friend requests or invite you to join a game.
+                </p>
+                <div style="display: flex; gap: 15px;">
+                    <button id="btn-notifications-later" class="btn-secondary-outline" style="flex: 1;">Later</button>
+                    <button id="btn-notifications-enable" class="btn-primary" style="flex: 1;">Enable</button>
                 </div>
             </div>
         </div>

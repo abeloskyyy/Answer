@@ -1,5 +1,10 @@
 const socket = io();
 
+// App Launch Tracking (For notification recurrence logic)
+const appLaunchCount = parseInt(localStorage.getItem('appLaunchCount') || '0') + 1;
+localStorage.setItem('appLaunchCount', appLaunchCount);
+console.log('App Launch Count:', appLaunchCount);
+
 // Reconnection handling for mobile app switching
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -150,6 +155,59 @@ function showFeedback(el, msg, type) {
 
 // Listen for Incoming Requests
 let requestsUnsubscribe = null;
+let invitesUnsubscribe = null;
+
+function listenForGameInvites() {
+    if (!currentUser) return Promise.resolve();
+    if (invitesUnsubscribe) invitesUnsubscribe();
+
+    return new Promise((resolve) => {
+        let firstLoad = true;
+        invitesUnsubscribe = db.collection('game_invites')
+            .where('to', '==', currentUser.uid)
+            .where('status', '==', 'pending')
+            .onSnapshot((snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === 'added') {
+                        const data = change.doc.data();
+                        const inviteId = change.doc.id;
+
+                        // Prevent showing if we are already in the target room
+                        if (currentRoomId === data.roomId) {
+                            db.collection('game_invites').doc(inviteId).update({ status: 'ignored' });
+                            return;
+                        }
+
+                        console.log('Received Firestore invite from:', data.fromName, 'Room:', data.roomId);
+
+                        // 1. Show OS Notification ONLY for new ones while app is open
+                        if (!firstLoad) {
+                            showOSNotification('Game Invite!', `${data.fromName} invited you to play a match.`);
+                        }
+
+                        // 2. Setup Modal Logic
+                        currentInviteData = { ...data, id: inviteId };
+                        const modalAvatar = document.querySelector('#incoming-invite-modal-overlay img');
+                        const modalText = document.querySelector('#incoming-invite-modal-overlay p');
+
+                        if (modalAvatar) modalAvatar.src = `assets/img/user-img/${data.fromAvatar || 'avatar_1.png'}`;
+                        if (modalText) modalText.innerText = `${data.fromName} has invited you to a game!`;
+
+                        const incomingInviteModalOverlay = document.getElementById('incoming-invite-modal-overlay');
+                        if (incomingInviteModalOverlay) incomingInviteModalOverlay.style.display = 'flex';
+                    }
+                });
+
+                if (firstLoad) {
+                    firstLoad = false;
+                    resolve();
+                }
+            }, (error) => {
+                console.error("Invites listener error:", error);
+                resolve();
+            });
+    });
+}
 function listenForFriendRequests() {
     if (!currentUser) return Promise.resolve();
     if (requestsUnsubscribe) requestsUnsubscribe(); // Clear prev
@@ -162,6 +220,17 @@ function listenForFriendRequests() {
             .onSnapshot(async (snapshot) => {
                 const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 await updateRequestsUI(requests);
+
+                // Trigger Notifications for NEW requests
+                if (!firstLoad) {
+                    snapshot.docChanges().forEach(change => {
+                        if (change.type === 'added') {
+                            const newReq = change.doc.data();
+                            showOSNotification('New Friend Request', `${newReq.fromName} wants to be your friend!`);
+                        }
+                    });
+                }
+
                 if (firstLoad) {
                     firstLoad = false;
                     resolve();
@@ -776,17 +845,24 @@ let isHost = false;
 let currentSettings = {}; // Cache for instant UI updates
 let myUUID = generateUUID(); // Initial Guest UUID
 
-// Helper to generate random UUID for guests
+// Helper to generate and persist UUID for guests
 function generateUUID() {
-    // If crypto.randomUUID is available (Modern Browsers)
-    if (crypto && crypto.randomUUID) {
-        return crypto.randomUUID();
+    let uuid = localStorage.getItem('guest_uuid');
+    if (uuid) return uuid;
+
+    // Use crypto.randomUUID if available
+    if (window.crypto && window.crypto.randomUUID) {
+        uuid = window.crypto.randomUUID();
+    } else {
+        // Fallback for older browsers
+        uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
     }
-    // Fallback
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
+
+    localStorage.setItem('guest_uuid', uuid);
+    return uuid;
 }
 
 // ==========================================
@@ -921,11 +997,27 @@ function sendInvite(targetUid, btn) {
     btn.disabled = true;
     btn.style.background = '#2ecc71';
 
+    // 1. Legacy socket emit (for users currently online/in rooms)
     socket.emit('invite_friend', {
         targetUid: targetUid,
         roomId: currentRoomId,
         hostName: currentUser.displayName,
         hostAvatar: currentUser.photoURL || 'avatar_1.png'
+    });
+
+    // 2. Firestore write (for offline/push notifications)
+    db.collection('game_invites').add({
+        to: targetUid,
+        from: currentUser.uid,
+        fromName: currentUser.displayName,
+        fromAvatar: currentUser.photoURL || 'avatar_1.png',
+        roomId: currentRoomId,
+        status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(() => {
+        console.log('✓ Invite stored in Firestore');
+    }).catch(err => {
+        console.error('Error saving invite to Firestore:', err);
     });
 
     // Reset button after delay?
@@ -963,6 +1055,10 @@ socket.on('invite_result', (data) => {
 // Socket: Receive Invite
 socket.on('receive_invite', (data) => {
     console.log('Received invite from:', data.hostName, 'Room:', data.roomId);
+
+    // Trigger OS Notification
+    showOSNotification('Game Invite!', `${data.hostName} invited you to play a match.`);
+
     // If I'm already in a room (and it's not the same room), show alert? 
     // Or just show modal regardless.
     // If I am in the same room, ignore.
@@ -989,7 +1085,7 @@ if (btnAcceptInvite) {
                 // UI update handles in leave_room/join logic
             }
 
-            // Join new room
+            // Join Room
             socket.emit('join_room', {
                 username: myUsername,
                 roomId: currentInviteData.roomId,
@@ -997,8 +1093,17 @@ if (btnAcceptInvite) {
                 uuid: myUUID
             });
 
+            // Mark invite as accepted in Firestore
+            if (currentInviteData.id) {
+                db.collection('game_invites').doc(currentInviteData.id).update({
+                    status: 'accepted',
+                    processedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
             // UI Transitions handled by 'room_joined' socket event in main logic
-            incomingInviteModalOverlay.style.display = 'none';
+            const incomingInviteModalOverlay = document.getElementById('incoming-invite-modal-overlay');
+            if (incomingInviteModalOverlay) incomingInviteModalOverlay.style.display = 'none';
         }
     });
 }
@@ -1006,7 +1111,16 @@ if (btnAcceptInvite) {
 // Decline Invite
 if (btnDeclineInvite) {
     btnDeclineInvite.addEventListener('click', () => {
-        incomingInviteModalOverlay.style.display = 'none';
+        const incomingInviteModalOverlay = document.getElementById('incoming-invite-modal-overlay');
+        if (incomingInviteModalOverlay) incomingInviteModalOverlay.style.display = 'none';
+
+        // Mark invite as declined in Firestore
+        if (currentInviteData && currentInviteData.id) {
+            db.collection('game_invites').doc(currentInviteData.id).update({
+                status: 'declined',
+                processedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
         currentInviteData = null;
     });
 }
@@ -1376,9 +1490,10 @@ auth.onAuthStateChanged(async (user) => {
         syncUserToDB(user); // Sync Profile for Search
         console.log('User is logged in:', user.displayName, 'UUID:', myUUID);
 
-        // Start Listening for Friend Requests & Friends - WAIT for initial load
+        // Start Listening for Friend Requests, Invites & Friends - WAIT for initial load
         await Promise.all([
             listenForFriendRequests(),
+            listenForGameInvites(),
             listenForFriends()
         ]);
 
@@ -1401,6 +1516,9 @@ auth.onAuthStateChanged(async (user) => {
 
         // Avatar Logic
         let avatarToUse = user.photoURL;
+
+        // Check for Notification Prompt
+        checkNotificationPrompt();
 
         // Force internal avatar system: If URL is external (Google) or missing, use default
         if (!avatarToUse || avatarToUse.startsWith('http')) {
@@ -1476,6 +1594,9 @@ function updateLoginUI(user) {
         const header = document.querySelector('.profile-header-unified');
         if (header) header.style.justifyContent = 'flex-start';
 
+        // Show invite button for authenticated users
+        if (btnInviteFriend) btnInviteFriend.style.display = 'flex';
+
     } else {
         if (guestLoginView) guestLoginView.style.display = 'block';
         if (userProfileView) userProfileView.style.display = 'none';
@@ -1484,6 +1605,9 @@ function updateLoginUI(user) {
         // Center avatar for guests
         const header = document.querySelector('.profile-header-unified');
         if (header) header.style.justifyContent = 'center';
+
+        // Hide invite button for guests (they don't have friends)
+        if (btnInviteFriend) btnInviteFriend.style.display = 'none';
     }
 }
 
@@ -1760,6 +1884,130 @@ tutorialModalOverlay.addEventListener('click', (e) => {
         tutorialModalOverlay.style.display = 'none';
     }
 });
+
+// --- Notification System ---
+const btnNotificationsEnable = document.getElementById('btn-notifications-enable');
+const btnNotificationsLater = document.getElementById('btn-notifications-later');
+const notificationPromptOverlay = document.getElementById('notification-prompt-overlay');
+
+function isCordova() {
+    return !!window.cordova;
+}
+
+async function requestNotificationPermission() {
+    console.log('Requesting notification permission...');
+    if (isCordova()) {
+        // Native Cordova Notification logic simulation
+        console.log('Cordova detected: requesting native permission simulation...');
+        saveNotificationPreference('granted');
+    } else {
+        if (!("Notification" in window)) {
+            console.warn("This browser does not support desktop notification");
+            return;
+        }
+
+        try {
+            const permission = await Notification.requestPermission();
+            console.log('Notification permission status:', permission);
+            saveNotificationPreference(permission);
+        } catch (error) {
+            console.error('Error requesting notification permission:', error);
+        }
+    }
+    if (notificationPromptOverlay) notificationPromptOverlay.style.display = 'none';
+}
+
+function showOSNotification(title, body) {
+    let notificationShown = false;
+
+    if (isCordova()) {
+        console.log('Cordova: Sending native notification -', title, body);
+        if (navigator.notification) {
+            navigator.notification.alert(body, null, title, 'OK');
+            notificationShown = true;
+        }
+    } else {
+        if ("Notification" in window && Notification.permission === "granted") {
+            try {
+                const notification = new Notification(title, {
+                    body: body,
+                    icon: '/favicon.ico'
+                });
+                notification.onclick = () => { window.focus(); notification.close(); };
+                notificationShown = true;
+            } catch (error) {
+                console.error('Error showing browser notification:', error);
+            }
+        }
+    }
+
+    // --- In-Game Fallback ---
+    // If OS notification wasn't shown (blocked/not supported), show a modal or toast
+    if (!notificationShown) {
+        console.log('OS Notification blocked/unsupported. Using in-game fallback.');
+        // If we choose showModal, it might interfere with other modals. 
+        // Let's use a subtle "Toast" if available or just log for now?
+        // Actually, the user asked for this, so let's use a simple alert-like UI or the existing showModal cautiously.
+        // For game invites, the modal itself is the fallback. 
+        // But for friend requests, we need something.
+        if (title.includes('Friend')) {
+            showModal(title, body);
+        }
+    }
+}
+
+function saveNotificationPreference(status) {
+    if (currentUser) {
+        db.collection('users').doc(currentUser.uid).update({
+            notificationPreference: status,
+            lastNotificationPromptAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            console.log('Notification preference saved:', status);
+        }).catch(err => {
+            console.error('Error saving notification preference:', err);
+        });
+    }
+}
+
+if (btnNotificationsEnable) {
+    btnNotificationsEnable.addEventListener('click', () => {
+        requestNotificationPermission();
+    });
+}
+
+if (btnNotificationsLater) {
+    btnNotificationsLater.addEventListener('click', () => {
+        if (notificationPromptOverlay) notificationPromptOverlay.style.display = 'none';
+    });
+}
+
+function checkNotificationPrompt() {
+    if (!currentUser) return;
+
+    db.collection('users').doc(currentUser.uid).get().then(doc => {
+        if (doc.exists) {
+            const data = doc.data();
+            const preference = data.notificationPreference;
+
+            // If they already granted or explicitly denied via system, don't show prompt again
+            if (preference === 'granted' || (preference === 'denied' && !isCordova())) {
+                return;
+            }
+
+            // 1. Show on very first launch/registration if no preference exists
+            if (!preference) {
+                if (notificationPromptOverlay) notificationPromptOverlay.style.display = 'flex';
+                return;
+            }
+
+            // 2. Recurrence: every 5 launches if they haven't granted it yet
+            if (appLaunchCount % 5 === 0) {
+                if (notificationPromptOverlay) notificationPromptOverlay.style.display = 'flex';
+            }
+        }
+    });
+}
+
 btnCreateRoom.addEventListener('click', () => {
     btnCreateRoom.disabled = true; // Prevent button spam
     socket.emit('create_room', { username: myUsername, avatar: myAvatar });
@@ -1811,6 +2059,10 @@ function leaveRoom() {
         // Clear room-specific displays
         currentRoomCodeDisplay.innerText = '';
         playerList.innerHTML = '';
+
+        // Clear mode display
+        roomModeBadge.style.display = 'none';
+        roomModeDisplay.innerText = '';
 
         // Reset any game over overlays if open
         const gameOverOverlay = document.getElementById('game-over-overlay');
@@ -1870,6 +2122,9 @@ function updateLobbyUI(settings) {
                 c.classList.add('guest-view');
             });
         }
+        // Hide mode badge if no mode selected
+        roomModeBadge.style.display = 'none';
+        roomModeDisplay.innerText = '';
     } else {
         // Configuration Phase
         if (configurationView.style.display !== 'flex') {
