@@ -802,7 +802,6 @@ const btnInviteFriend = document.getElementById('btn-invite-friend');
 const inviteFriendsModalOverlay = document.getElementById('invite-friends-modal-overlay');
 const btnCloseInviteFriends = document.getElementById('btn-close-invite-friends');
 const inviteListOnline = document.getElementById('invite-list-online');
-const inviteListOffline = document.getElementById('invite-list-offline');
 
 // Incoming Invite Elements
 const incomingInviteModalOverlay = document.getElementById('incoming-invite-modal-overlay');
@@ -847,10 +846,9 @@ if (btnCloseInviteFriends) {
 
 async function renderInviteList() {
     inviteListOnline.innerHTML = '';
-    inviteListOffline.innerHTML = '';
 
     if (!lastFriendsList || lastFriendsList.length === 0) {
-        inviteListOffline.innerHTML = '<p class="empty-state">No friends to invite.</p>';
+        inviteListOnline.innerHTML = '<p class="empty-state">No friends to invite.</p>';
         return;
     }
 
@@ -884,9 +882,11 @@ async function renderInviteList() {
         // Match main friends list: Online = isOnline flag AND active within 90 seconds
         const isOnline = friend.isOnline && diffSec < 90;
 
+        if (!isOnline) return;
+
         console.log(`Friend ${friend.username}: isOnline=${friend.isOnline}, diffSec=${diffSec}, calculated=${isOnline}`);
 
-        const container = isOnline ? inviteListOnline : inviteListOffline;
+        const container = inviteListOnline;
 
         const item = document.createElement('div');
         item.className = 'invite-friend-item';
@@ -908,11 +908,7 @@ async function renderInviteList() {
     });
 
     if (inviteListOnline.children.length === 0) {
-        inviteListOnline.innerHTML = '<p class="empty-state" style="padding:10px;">No friends online.</p>';
-    }
-
-    if (inviteListOffline.children.length === 0) {
-        inviteListOffline.innerHTML = '<p class="empty-state" style="padding:10px;">No offline friends.</p>';
+        inviteListOnline.innerHTML = '<p class="empty-state" style="padding:10px;">No friends online to invite.</p>';
     }
 }
 
