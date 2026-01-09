@@ -9,6 +9,7 @@ const APP_TITLE = 'Answer';
 const MOBILE_DIR = path.join(__dirname, PROJECT_NAME);
 const WEB_BUILD_DIR = path.join(__dirname, 'web-build');
 const WWW_DIR = path.join(MOBILE_DIR, 'www');
+const RELEASES_DIR = path.join(__dirname, 'mobile-releases');
 
 // ==========================================
 // CONFIGURACIÓN DE ENTORNO (AUTOMÁTICA)
@@ -43,7 +44,7 @@ if (fs.existsSync(ANDROID_SDK_PATH)) {
 // ==========================================
 // Poner la IP de tu PC o URL de tu servidor (ej: "http://192.168.1.34:3000")
 // Si usas "localhost", el emulador de Android NO conectará (usa 10.0.2.2 o tu IP local)
-const SERVER_URL = "http://192.168.1.XX:3000";
+const SERVER_URL = "https://answer-63ef.onrender.com";
 // ==========================================
 
 function runCommand(command, cwd) {
@@ -74,11 +75,15 @@ function buildMobile() {
         }
 
         runCommand(`cordova create ${PROJECT_NAME} ${APP_ID} "${APP_TITLE}"`, __dirname);
-
-        // Add Android Platform
-        runCommand('cordova platform add android', MOBILE_DIR);
     } else {
         console.log('Cordova project already exists.');
+    }
+
+    // Ensure Android platform is added
+    const androidPlatformPath = path.join(MOBILE_DIR, 'platforms', 'android');
+    if (!fs.existsSync(androidPlatformPath)) {
+        console.log('Adding Android platform...');
+        runCommand('cordova platform add android', MOBILE_DIR);
     }
 
     // 3. Clear 'www' and Copy Web Build
@@ -138,11 +143,33 @@ window.GAME_CONFIG = {
     }
 
     // 6. Build APK
+    console.log('Checking Cordova requirements...');
+    try {
+        runCommand('cordova requirements', MOBILE_DIR);
+    } catch (e) {
+        console.warn('Warning: Some Cordova requirements failed, but attempting build anyway...');
+    }
+
     console.log('Building Android APK...');
     runCommand('cordova build android', MOBILE_DIR);
 
-    console.log('Mobile Build Complete!');
-    console.log(`APK location: ${path.join(MOBILE_DIR, 'platforms/android/app/build/outputs/apk/debug/app-debug.apk')}`);
+    // 7. Move APK to releases folder
+    console.log('Moving APK to releases folder...');
+    if (!fs.existsSync(RELEASES_DIR)) {
+        fs.mkdirSync(RELEASES_DIR);
+    }
+
+    const apkSrc = path.join(MOBILE_DIR, 'platforms/android/app/build/outputs/apk/debug/app-debug.apk');
+    const apkDest = path.join(RELEASES_DIR, `${APP_TITLE.toLowerCase()}-debug.apk`);
+
+    if (fs.existsSync(apkSrc)) {
+        fs.copyFileSync(apkSrc, apkDest);
+        console.log('Mobile Build Complete!');
+        console.log(`APK moved to: ${apkDest}`);
+    } else {
+        console.error('Error: APK not found after build!');
+    }
+
     console.log('NOTA: Si la app no conecta, edita la variable SERVER_URL en build-mobile.js y vuelve a ejecutar.');
 }
 

@@ -1,4 +1,4 @@
 
 window.GAME_CONFIG = {
-    SERVER_URL: "http://192.168.1.XX:3000"
+    SERVER_URL: "https://answer-63ef.onrender.com"
 };
