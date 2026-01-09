@@ -4,9 +4,21 @@ const { Server } = require("socket.io");
 const path = require('path');
 const fs = require('fs');
 
+const cors = require('cors');
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Enable CORS for all origins (Mobile App/Web Hosting)
+app.use(cors());
+
+// Configure Socket.IO with CORS
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Allow any origin
+        methods: ["GET", "POST"]
+    }
+});
 
 // Load Game Modes
 const gameModes = {
@@ -54,15 +66,7 @@ io.on('connection', (socket) => {
         // For now, we trust the client sends their Auth UID as 'uuid' or a separate field if we want.
         // Based on scripts.js plan, we will send { name: ..., uuid: currentUser.uid }
 
-        if (uuid) {
-            // Clean up any existing mappings for THIS socket (e.g. if user was a guest and just logged in)
-            for (const [existingUid, sid] of connectedUsers.entries()) {
-                if (sid === socket.id && existingUid !== uuid) {
-                    connectedUsers.delete(existingUid);
-                    console.log(`Replacing old mapping ${existingUid} with ${uuid} for socket ${socket.id}`);
-                }
-            }
-
+        if (uuid && !uuid.startsWith('guest-')) {
             connectedUsers.set(uuid, socket.id);
             console.log(`Registered user ${name} [${uuid}] -> Socket ${socket.id}`);
             console.log(`Total connected users: ${connectedUsers.size}`);
@@ -116,12 +120,12 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Check if this is a reconnection (user with same UUID exists)
-            const existingUser = room.users.find(u => u.uuid === uuid);
+            // Check if this is a reconnection (user with same name exists)
+            const existingUser = room.users.find(u => u.name === username);
 
-            if (existingUser) {
-                // This is a reconnection/refresh!
-                console.log(`User reconnecting to room ${roomId}: ${username} (old sid: ${existingUser.id}, new: ${socket.id}, UUID: ${uuid})`);
+            if (existingUser && existingUser.disconnected) {
+                // This is a reconnection!
+                console.log(`User reconnecting to room ${roomId}: ${username} (old: ${existingUser.id}, new: ${socket.id})`);
 
                 // Cancel the disconnect timeout
                 const dTimeout = disconnectTimeouts.get(socket.id) || disconnectTimeouts.get(existingUser.id);
@@ -428,15 +432,7 @@ io.on('connection', (socket) => {
 
     // Disconnect
     socket.on('disconnect', () => {
-        // ALWAYS clean up mapping from connectedUsers global map
-        for (const [uid, sid] of connectedUsers.entries()) {
-            if (sid === socket.id) {
-                connectedUsers.delete(uid);
-                console.log(`Cleaned up connectedUsers mapping for ${uid}`);
-            }
-        }
-
-        // Skip room grace period if user explicitly left (e.g. clicked Exit)
+        // Skip grace period if user explicitly left the room (e.g. clicked Exit)
         if (socket.explicitLeave) return;
 
         // Grace period for reconnection (useful for mobile app switching)
@@ -497,6 +493,14 @@ io.on('connection', (socket) => {
             }
         }
 
+        // Remove from connectedUsers global map
+        for (const [uid, sid] of connectedUsers.entries()) {
+            if (sid === socket.id) {
+                connectedUsers.delete(uid);
+                console.log(`Removed local mapping for ${uid}`);
+                break;
+            }
+        }
     });
 });
 
