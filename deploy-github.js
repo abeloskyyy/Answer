@@ -2,52 +2,51 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('Deploying to GitHub Pages...');
+console.log('🚀 Iniciando despliegue en GitHub Pages...');
 
-// 1. Build web version
-console.log('Building web version...');
+// 1. Ejecutar el build primero para asegurar que tenemos lo último
+console.log('📦 Generando build...');
 execSync('node build-web.js', { stdio: 'inherit' });
 
-// 2. Create/switch to gh-pages branch
-try {
-    execSync('git checkout gh-pages', { stdio: 'inherit' });
-} catch (e) {
-    console.log('Creating gh-pages branch...');
-    execSync('git checkout --orphan gh-pages', { stdio: 'inherit' });
-}
+const buildPath = path.join(__dirname, 'web-build');
 
-// 3. Clear everything except web-build
-console.log('Clearing old files...');
-const files = fs.readdirSync('.');
-files.forEach(file => {
-    if (file !== 'web-build' && file !== '.git' && file !== 'node_modules') {
-        try {
-            fs.rmSync(file, { recursive: true, force: true });
-        } catch (e) { }
+try {
+    // 2. Inicializar git en la carpeta web-build si no existe
+    if (!fs.existsSync(path.join(buildPath, '.git'))) {
+        console.log('🔧 Inicializando repo en web-build...');
+        execSync('git init', { cwd: buildPath, stdio: 'inherit' });
+
+        // Obtener la URL del remoto actual para usarla en la carpeta build
+        const remoteUrl = execSync('git remote get-url origin').toString().trim();
+        execSync(`git remote add origin ${remoteUrl}`, { cwd: buildPath, stdio: 'inherit' });
     }
-});
 
-// 4. Move web-build contents to root
-console.log('Moving web-build to root...');
-const webBuildFiles = fs.readdirSync('web-build');
-webBuildFiles.forEach(file => {
-    fs.renameSync(path.join('web-build', file), file);
-});
-fs.rmdirSync('web-build');
+    // 3. Crear o cambiar a rama gh-pages dentro de web-build
+    console.log('🌿 Preparando rama gh-pages...');
+    try {
+        execSync('git checkout -b gh-pages', { cwd: buildPath, stdio: 'ignore' });
+    } catch (e) {
+        // Si ya existe la rama localmente
+        execSync('git checkout gh-pages', { cwd: buildPath, stdio: 'ignore' });
+    }
 
-// 5. Commit and push
-console.log('Committing and pushing...');
-execSync('git add -A', { stdio: 'inherit' });
-try {
-    execSync('git commit -m "Deploy to GitHub Pages"', { stdio: 'inherit' });
-    execSync('git push -u origin gh-pages --force', { stdio: 'inherit' });
-} catch (e) {
-    console.log('No changes to commit or push failed');
+    // 4. Hacer commit y push forzado
+    console.log('📤 Subiendo cambios a GitHub...');
+    execSync('git add -A', { cwd: buildPath, stdio: 'inherit' });
+
+    // Solo hacemos commit si hay cambios
+    try {
+        execSync('git commit -m "Deploy automatico a GitHub Pages"', { cwd: buildPath, stdio: 'inherit' });
+    } catch (e) {
+        console.log('✅ No hay cambios nuevos que subir.');
+    }
+
+    // Push forzado a la rama gh-pages del remoto
+    execSync('git push origin gh-pages --force', { cwd: buildPath, stdio: 'inherit' });
+
+    console.log('\n✨ ¡Despliegue completado con éxito!');
+    console.log('Tu web se actualizará en unos instantes en: https://abeloskyyy.github.io/Answer/');
+
+} catch (error) {
+    console.error('\n❌ Error durante el despliegue:', error.message);
 }
-
-// 6. Return to main branch
-execSync('git checkout main', { stdio: 'inherit' });
-
-console.log('\n✅ Deployment complete!');
-console.log('Your site will be available at: https://abeloskyyy.github.io/Answer/');
-console.log('(May take a few minutes to go live)');
