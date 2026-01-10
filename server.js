@@ -20,6 +20,88 @@ const io = new Server(server, {
     }
 });
 
+// Firebase Admin Setup (for Notifications)
+const admin = require("firebase-admin");
+try {
+    let serviceAccount;
+    // 1. Try Environment Variable (For Render/Production)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        try {
+            serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            console.log("Loaded Firebase credentials from Environment Variable");
+        } catch (parseError) {
+            console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT:", parseError.message);
+        }
+    }
+    // 2. Try Local File (Fall back)
+    if (!serviceAccount) {
+        try {
+            serviceAccount = require("./service-account.json");
+            console.log("Loaded Firebase credentials from local file");
+        } catch (err) {
+            // console.log("Local service-account.json not found.");
+        }
+    }
+
+    if (serviceAccount) {
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+        console.log("Firebase Admin initialized for Notifications");
+    } else {
+        console.warn("No service account credentials found. Notifications disabled.");
+    }
+} catch (e) {
+    console.error("Failed to initialize Firebase Admin:", e.message);
+}
+
+// Global DB Reference
+const db = admin.apps.length ? admin.firestore() : null;
+
+// Helper to send FCM Notification
+async function sendPushNotification(uid, title, body, data = {}) {
+    if (!db) return;
+    try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) return;
+
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+
+        if (fcmToken) {
+            await admin.messaging().send({
+                token: fcmToken,
+                notification: {
+                    title: title,
+                    body: body
+                },
+                data: data
+            });
+            console.log(`Notification sent to ${uid}: ${title}`);
+        }
+    } catch (e) {
+        console.error(`Error sending notification to ${uid}:`, e.message);
+    }
+}
+
+// Monitor Friend Requests
+if (db) {
+    db.collection('friend_requests')
+        .where('status', '==', 'pending')
+        .onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const req = change.doc.data();
+                    sendPushNotification(
+                        req.to,
+                        "New Friend Request",
+                        `${req.fromName} wants to be friends!`
+                    );
+                }
+            });
+        }, err => console.error("Friend request monitor error:", err));
+}
+
 // Load Game Modes
 const gameModes = {
     'root_rush': require('./gamemodes/RootRush'),
@@ -342,66 +424,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Firebase Admin Setup (for Notifications)
-    const admin = require("firebase-admin");
-    try {
-        const serviceAccount = require("./service-account.json");
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-        console.log("Firebase Admin initialized for Notifications");
-    } catch (e) {
-        console.error("Failed to initialize Firebase Admin (Missing service-account.json?):", e.message);
-    }
-
-    const db = admin.firestore();
-
-    // Helper to send FCM Notification
-    async function sendPushNotification(uid, title, body, data = {}) {
-        try {
-            const userDoc = await db.collection('users').doc(uid).get();
-            if (!userDoc.exists) return;
-
-            const userData = userDoc.data();
-            const fcmToken = userData.fcmToken;
-
-            if (fcmToken) {
-                await admin.messaging().send({
-                    token: fcmToken,
-                    notification: {
-                        title: title,
-                        body: body
-                    },
-                    data: data
-                });
-                console.log(`Notification sent to ${uid}: ${title}`);
-            }
-        } catch (e) {
-            console.error(`Error sending notification to ${uid}:`, e.message);
-        }
-    }
-
-    // Monitor Friend Requests
-    db.collection('friend_requests')
-        .where('status', '==', 'pending')
-        .onSnapshot(snapshot => {
-            snapshot.docChanges().forEach(change => {
-                if (change.type === 'added') {
-                    const req = change.doc.data();
-                    // Avoid notifying if the request is old (optional, but good practice)
-                    const now = Date.now();
-                    // If we had a timestamp check, we would do it here. For now, we assume active server listens to new ones.
-                    // Or better: ensure we don't spam on server restart. Ideally check 'timestamp' > serverStartTime
-
-                    // Fetch destination user name not needed for notif content usually, just "New Friend Request"
-                    sendPushNotification(
-                        req.to,
-                        "New Friend Request",
-                        `${req.fromName} wants to be friends!`
-                    );
-                }
-            });
-        });
+    // ... (Existing Routes) ...
 
 
     // ... (Existing Routes) ...
