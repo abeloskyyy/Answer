@@ -30,13 +30,18 @@ try {
         execSync('git checkout gh-pages', { cwd: buildPath, stdio: 'ignore' });
     }
 
-    // 4. Hacer commit y push forzado
+    // 4. Asegurar que el dominio custom no se borre
+    const CUSTOM_DOMAIN = "answer.abelosky.com"; // CAMBIA ESTO por tu dominio real
+    fs.writeFileSync(path.join(buildPath, 'CNAME'), CUSTOM_DOMAIN);
+    console.log(`📌 Dominio custom configurado: ${CUSTOM_DOMAIN}`);
+
+    // 5. Hacer commit y push forzado
     console.log('📤 Subiendo cambios a GitHub...');
     execSync('git add -A', { cwd: buildPath, stdio: 'inherit' });
 
     // Solo hacemos commit si hay cambios
     try {
-        execSync('git commit -m "Deploy automatico a GitHub Pages"', { cwd: buildPath, stdio: 'inherit' });
+        execSync('git commit -m "Deploy automatico con CNAME"', { cwd: buildPath, stdio: 'inherit' });
     } catch (e) {
         console.log('✅ No hay cambios nuevos que subir.');
     }
