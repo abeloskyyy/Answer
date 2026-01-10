@@ -151,13 +151,7 @@ function buildMobile() {
     if (fs.existsSync(LOGO_SQUARE)) {
         fs.copyFileSync(LOGO_SQUARE, path.join(resDir, 'icon.png'));
         fs.copyFileSync(LOGO_SQUARE, path.join(resourcesDir, 'icon.png'));
-        console.log('✔ Icon assets updated.');
-    }
-
-    if (fs.existsSync(LOGO_RECT)) {
-        fs.copyFileSync(LOGO_RECT, path.join(resDir, 'splash.png'));
-        fs.copyFileSync(LOGO_RECT, path.join(resourcesDir, 'splash.png'));
-        console.log('✔ Splash assets updated.');
+        console.log('✔ Icon assets (and Splash Icon) updated.');
     }
 
     // 4. Inject Mobile Config
