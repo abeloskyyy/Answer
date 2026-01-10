@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "894472877590-72035sc94pkdp24keccr30kh63lb025q.apps.googleusercontent.com",
+          "client_id": "894472877590-a2ihj2jo09qt4rbaf3kvh55rctpa157l.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.abelosky.answer",
-            "certificate_hash": "10721d772e0b27cb46f1b41a9ad5a12a657d2ac7"
+            "certificate_hash": "10721d772e0b27cb2ac746f1b41a9ad5a12a657d"
           }
         },
         {
