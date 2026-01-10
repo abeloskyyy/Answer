@@ -53,7 +53,7 @@ async function main() {
             console.log('\n=========================================');
             console.log('✨ ¡TODO COMPLETADO CON ÉXITO!');
             console.log('✅ Web construida');
-            console.log('✅ APK generado y movido a releases');
+            console.log('✅ APK generado y movido a mobile-releases');
             console.log('✅ GitHub Pages actualizado');
             console.log('✅ Código subido a GitHub');
             console.log('=========================================');
