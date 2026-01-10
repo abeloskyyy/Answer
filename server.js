@@ -342,14 +342,76 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Firebase Admin Setup (for Notifications)
+    const admin = require("firebase-admin");
+    try {
+        const serviceAccount = require("./service-account.json");
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+        console.log("Firebase Admin initialized for Notifications");
+    } catch (e) {
+        console.error("Failed to initialize Firebase Admin (Missing service-account.json?):", e.message);
+    }
+
+    const db = admin.firestore();
+
+    // Helper to send FCM Notification
+    async function sendPushNotification(uid, title, body, data = {}) {
+        try {
+            const userDoc = await db.collection('users').doc(uid).get();
+            if (!userDoc.exists) return;
+
+            const userData = userDoc.data();
+            const fcmToken = userData.fcmToken;
+
+            if (fcmToken) {
+                await admin.messaging().send({
+                    token: fcmToken,
+                    notification: {
+                        title: title,
+                        body: body
+                    },
+                    data: data
+                });
+                console.log(`Notification sent to ${uid}: ${title}`);
+            }
+        } catch (e) {
+            console.error(`Error sending notification to ${uid}:`, e.message);
+        }
+    }
+
+    // Monitor Friend Requests
+    db.collection('friend_requests')
+        .where('status', '==', 'pending')
+        .onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const req = change.doc.data();
+                    // Avoid notifying if the request is old (optional, but good practice)
+                    const now = Date.now();
+                    // If we had a timestamp check, we would do it here. For now, we assume active server listens to new ones.
+                    // Or better: ensure we don't spam on server restart. Ideally check 'timestamp' > serverStartTime
+
+                    // Fetch destination user name not needed for notif content usually, just "New Friend Request"
+                    sendPushNotification(
+                        req.to,
+                        "New Friend Request",
+                        `${req.fromName} wants to be friends!`
+                    );
+                }
+            });
+        });
+
+
+    // ... (Existing Routes) ...
+
     // Invite Friend
-    socket.on('invite_friend', (data) => {
+    socket.on('invite_friend', async (data) => {
         const { targetUid, roomId, hostName, hostAvatar } = data;
         const targetSocketId = connectedUsers.get(targetUid);
 
         console.log(`Invite attempt: ${hostName} -> ${targetUid} for room ${roomId}`);
-        console.log(`Target socket ID: ${targetSocketId || 'NOT FOUND'}`);
-        console.log(`Connected users map:`, Array.from(connectedUsers.entries()));
 
         if (targetSocketId) {
             io.to(targetSocketId).emit('receive_invite', {
@@ -359,10 +421,18 @@ io.on('connection', (socket) => {
             });
             // Confirm to sender
             socket.emit('invite_result', { success: true, targetUid: targetUid });
-            console.log(`✓ Invite sent successfully to ${targetUid}`);
         } else {
-            console.log(`✗ Failed to invite ${targetUid}: User not connected. Connected Users: ${connectedUsers.size}`);
-            socket.emit('invite_result', { success: false, targetUid: targetUid, reason: 'offline' });
+            console.log(`User offline, sending Push Notification to ${targetUid}`);
+
+            // Send Push Notification
+            await sendPushNotification(
+                targetUid,
+                "Game Invitation",
+                `${hostName} invited you to play!`,
+                { roomId: roomId, type: 'invite' }
+            );
+
+            socket.emit('invite_result', { success: true, targetUid: targetUid, reason: 'sent_push' });
         }
     });
 

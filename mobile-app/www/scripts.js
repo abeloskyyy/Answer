@@ -25,6 +25,16 @@ socket.on('connect', () => {
     reconnectAttempts = 0;
     hideReconnectingMessage();
 
+    // Hide Server Loading Screen if visible
+    const serverLoadingScreen = document.getElementById('server-loading-screen');
+    if (serverLoadingScreen && serverLoadingScreen.style.display !== 'none') {
+        serverLoadingScreen.classList.add('fade-out');
+        setTimeout(() => {
+            serverLoadingScreen.style.display = 'none';
+            serverLoadingScreen.classList.remove('fade-out'); // clean up
+        }, 500);
+    }
+
     // Emit login to ensure server knows our UUID (for reconnecting mobile users)
     if (myUsername && myUUID) {
         socket.emit('login', { name: myUsername, uuid: myUUID });
@@ -606,8 +616,10 @@ let applauseTimeout = null;
 function playSFX(audio) {
     if (musicManager.isMuted) return;
 
-    // Duck music
-    musicManager.duck();
+    // Duck music (EXCEPT for clicks)
+    if (audio !== sfxClick) {
+        musicManager.duck();
+    }
 
     const isPersistent = (audio === sfxTicTac || audio === sfxApplause);
     const sound = isPersistent ? audio : audio.cloneNode();
@@ -618,13 +630,17 @@ function playSFX(audio) {
     // Unduck when one-shot sound ends
     if (!isPersistent) {
         sound.addEventListener('ended', () => {
-            musicManager.unduck();
+            if (audio !== sfxClick) {
+                musicManager.unduck();
+            }
         });
     }
 
     sound.play().catch(err => {
         console.log('SFX blocked:', err);
-        musicManager.unduck();
+        if (audio !== sfxClick) {
+            musicManager.unduck();
+        }
     });
     return sound;
 }
@@ -688,10 +704,125 @@ btnToggleMusic.addEventListener('click', (e) => {
     btnToggleMusic.classList.toggle('muted', isMuted);
 });
 
-// Start music on first interaction
+// Start music on first interaction (Fallback for browsers that block autoplay)
+// Start music on first interaction (Fallback for browsers that block autoplay)
 document.addEventListener('click', () => {
     musicManager.start();
+    // Also resume AudioContext if it exists and is suspended (common in some browsers)
+    if (musicManager.audio && musicManager.audio.context && musicManager.audio.context.state === 'suspended') {
+        musicManager.audio.context.resume();
+    }
 }, { once: true });
+
+// Handle Mobile Fullscreen (Immersive Mode) & Audio Init
+document.addEventListener('deviceready', () => {
+    // 1. Enable Immersive Mode (Android) if plugin available
+    if (window.AndroidFullScreen) {
+        window.AndroidFullScreen.immersiveMode(
+            () => console.log('Immersive mode enabled'),
+            (err) => console.error('Error enabling immersive mode:', err)
+        );
+    }
+
+    // 2. Handle Android Back Button (Optional but good for fullscreen UX)
+    document.addEventListener('backbutton', (e) => {
+        e.preventDefault();
+        // If in a room, maybe ask to leave? For now just minimize or ignore if no logic.
+        // Let's defer to existing beforeunload logic or specific modal handling if needed.
+        if (currentRoomId) {
+            showModal(
+                'Exit Game?',
+                'Are you sure you want to leave the game?',
+                () => {
+                    if (currentRoomId) socket.emit('leave_room', currentRoomId);
+                    window.location.reload();
+                },
+                () => { } // Cancel
+            );
+        } else {
+            // If in lobby/login, maybe minimize app?
+            // navigator.app.exitApp(); 
+        }
+    }, false);
+
+    // 3. Try to start music on device ready (often allowed in Cordova without interaction)
+    musicManager.start(); // This usually works in Cordova
+
+    // 4. Notification Logic (Firebasex)
+    if (window.FirebasePlugin) {
+        checkNotificationPermission();
+    }
+}, false);
+
+// Notification Permission & Token Logic
+async function checkNotificationPermission() {
+    const launchCount = parseInt(localStorage.getItem('app_launch_count') || '0') + 1;
+    localStorage.setItem('app_launch_count', launchCount);
+
+    const permStatus = localStorage.getItem('notification_permission_status'); // null, 'granted', 'later', 'denied'
+
+    // Condition: No permission yet AND (Never asked OR (Status='later' AND launchCount % 5 == 0))
+    if (!permStatus || (permStatus === 'later' && launchCount % 5 === 0)) {
+        // Show In-Game Modal
+        showModal(
+            'Enable Notifications?',
+            'Get notified about game invites and friend requests when you are not playing!',
+            async () => {
+                // Yes -> Request Permission
+                try {
+                    const hasPerm = await new Promise(resolve => window.FirebasePlugin.hasPermission(resolve));
+                    if (!hasPerm) {
+                        await new Promise((resolve, reject) => window.FirebasePlugin.grantPermission(resolve, reject));
+                    }
+                    localStorage.setItem('notification_permission_status', 'granted');
+                    registerFCM();
+                } catch (err) {
+                    console.error('Permission error:', err);
+                    // If denied by system, maybe set 'denied'
+                }
+            },
+            () => {
+                // Later -> Store status
+                localStorage.setItem('notification_permission_status', 'later');
+            },
+            'Yes, enable',
+            'Not now'
+        );
+    } else if (permStatus === 'granted') {
+        // Already granted, ensure token is fresh
+        registerFCM();
+    }
+}
+
+async function registerFCM() {
+    if (!window.FirebasePlugin) return;
+
+    try {
+        const token = await new Promise((resolve, reject) => window.FirebasePlugin.getToken(resolve, reject));
+        console.log('FCM Token:', token);
+
+        // Save to global var to be synced to DB
+        window.myFCMToken = token;
+
+        // If user is already logged in, sync immediately
+        if (currentUser) {
+            syncUserToDB(currentUser);
+        }
+
+        // Listen for foreground notifications
+        window.FirebasePlugin.onMessageReceived((message) => {
+            console.log("Notification received:", message);
+            if (message.messageType === 'notification') {
+                const text = message.body || message.alert;
+                // Show a toast or in-game message
+                showFeedback(document.body, `Notification: ${text}`, 'success'); // Quick hack to show it
+            }
+        }, (err) => console.error(err));
+
+    } catch (err) {
+        console.error('Error getting FCM token:', err);
+    }
+}
 
 // Background Animation
 function createMathBackground() {
@@ -741,7 +872,8 @@ async function syncUserToDB(user) {
                 usernameLower: (user.displayName || '').toLowerCase(), // For search
                 photoURL: user.photoURL || 'avatar_1.png',
                 lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-                isOnline: isOnline
+                isOnline: isOnline,
+                fcmToken: window.myFCMToken || null // Sync FCM Token
             }, { merge: true });
             console.log(`User synced to Firestore (isOnline: ${isOnline})`);
         } catch (e) {
@@ -1489,11 +1621,48 @@ auth.onAuthStateChanged(async (user) => {
         updateLoginUI(null);
     }
 
-    // Hide loading screen once auth state AND initial data are resolved
+    // Hide loading screen logic
     const loadingScreen = document.getElementById('initial-loading-screen');
-    if (loadingScreen && !loadingScreen.classList.contains('fade-out')) {
-        loadingScreen.classList.add('fade-out');
-        setTimeout(() => loadingScreen.style.display = 'none', 500); // Remove from flow
+    const serverLoadingScreen = document.getElementById('server-loading-screen');
+
+    // Helper to finish loading
+    const finishLoading = () => {
+        if (loadingScreen && !loadingScreen.classList.contains('fade-out')) {
+            loadingScreen.classList.add('fade-out');
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+            }, 500);
+        }
+    };
+
+    if (socket.connected) {
+        // Connected? Finish immediately.
+        finishLoading();
+    } else {
+        // Not connected? Wait a grace period (e.g. 1.5s) to see if it's just normal latency
+        // If it connects within this time, 'connect' listener will handle it (we need to ensure that)
+        // If not, we switch to server loading screen.
+
+        // However, 'connect' listener usually effectively hides serverLoadingScreen logic.
+        // We need 'connect' listener to ALSO trigger finishLoading if it happens late.
+
+        // Better approach: 
+        // 1. Show ServerLoadingScreen behind InitialLoader immediately (display:flex, z-index lower)
+        if (serverLoadingScreen) {
+            serverLoadingScreen.style.display = 'flex';
+        }
+
+        // 2. Wait 2 seconds before fading out InitialLoader. 
+        // If connection happens during this 2s, 'connect' logic will hide ServerLoadingScreen.
+        // So when InitialLoader fades, user sees Lobby.
+        // If connection doesn't happen, ServerLoadingScreen remains visible.
+
+        setTimeout(() => {
+            // If connected now, ServerLoadingScreen matches 'none' (handled by connect listener).
+            // If not connected, it is 'flex'.
+            // Fade out InitialLoader to reveal whatever is behind.
+            finishLoading();
+        }, 1500);
     }
 });
 
@@ -3205,5 +3374,3 @@ function submitTwentyFourAnswer() {
     const waitingOverlay = document.getElementById('waiting-overlay');
     if (waitingOverlay) waitingOverlay.style.display = 'flex';
 }
-
-

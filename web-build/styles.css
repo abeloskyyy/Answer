@@ -3877,3 +3877,84 @@ select:focus {
     margin: 0;
     font-style: italic;
 }
+
+/* =========================================
+   SERVER LOADING SCREEN
+========================================= */
+#server-loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--background);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    flex-direction: column;
+    text-align: center;
+    transition: opacity 0.5s ease-out;
+}
+
+#server-loading-screen.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.server-loader-content {
+    padding: 20px;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.cloud-icon {
+    font-size: 5rem;
+    color: var(--primary);
+    margin-bottom: 20px;
+    position: relative;
+    display: inline-block;
+    animation: floating 3s ease-in-out infinite;
+}
+
+.cloud-dots {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+}
+
+.cloud-dots span {
+    width: 6px;
+    height: 6px;
+    background-color: white;
+    border-radius: 50%;
+    animation: blink 1.4s infinite both;
+}
+
+.cloud-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.cloud-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+#server-loading-screen h2 {
+    color: var(--primary);
+    margin-bottom: 10px;
+    margin-top: 0;
+}
+
+#server-loading-screen p {
+    color: var(--text);
+    opacity: 0.7;
+    margin: 0;
+}
+
+/* Ensure initial loader also handles fade out cleanly if not already */
+#initial-loading-screen.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
