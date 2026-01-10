@@ -25,7 +25,7 @@
         <preference name="android-minSdkVersion" value="24" />
         <preference name="android-targetSdkVersion" value="35" />
         <!-- Android 12+ Splash Screen -->
-        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/splash.png" />
         <preference name="AndroidWindowSplashScreenBackground" value="#0f172a" />
     </platform>
     
