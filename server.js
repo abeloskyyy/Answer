@@ -95,7 +95,8 @@ if (db) {
                     sendPushNotification(
                         req.to,
                         "New Friend Request",
-                        `${req.fromName} wants to be friends!`
+                        `${req.fromName} wants to be friends!`,
+                        { type: 'friend_request' }
                     );
                 }
             });

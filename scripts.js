@@ -1,3 +1,74 @@
+// Debug Console Logic (Mobile)
+(function () {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    function appendToDebug(type, args) {
+        const debugContent = document.getElementById('debug-content');
+        const debugConsole = document.getElementById('debug-console');
+        if (!debugConsole || !debugContent || debugConsole.style.display === 'none') {
+            // Keep buffer or just ignore if hidden to save performance? 
+            // Better to append always so we can see past logs when opening.
+        }
+        if (!debugContent) return;
+
+        const msg = args.map(arg => {
+            if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return '[Object]';
+                }
+            }
+            return String(arg);
+        }).join(' ');
+
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${msg}`;
+        debugContent.appendChild(entry);
+        // Auto scroll
+        debugContent.scrollTop = debugContent.scrollHeight;
+    }
+
+    console.log = function (...args) {
+        originalLog.apply(console, args);
+        appendToDebug('info', args);
+    };
+
+    console.error = function (...args) {
+        originalError.apply(console, args);
+        appendToDebug('error', args);
+    };
+
+    console.warn = function (...args) {
+        originalWarn.apply(console, args);
+        appendToDebug('warn', args);
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Debug UI Events
+    const btnClose = document.getElementById('btn-close-debug');
+    const btnClear = document.getElementById('btn-clear-debug');
+    const debugConsole = document.getElementById('debug-console');
+
+    if (btnClose) btnClose.onclick = () => debugConsole.style.display = 'none';
+    if (btnClear) btnClear.onclick = () => document.getElementById('debug-content').innerHTML = '';
+
+    // Mobile specific: Open debug with 3 finger tap or hidden button? 
+    // We added a button in Settings, let's wire it up here if it exists.
+    const btnOpenDebug = document.getElementById('btn-open-debug');
+    if (btnOpenDebug) {
+        btnOpenDebug.onclick = () => {
+            debugConsole.style.display = 'flex';
+            // Also close settings modal
+            document.getElementById('settings-modal-overlay').style.display = 'none';
+        }
+    }
+});
+
 // Use configured server URL or default to window origin (automatic for web, manual for mobile)
 const SERVER_URL = (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) ? window.GAME_CONFIG.SERVER_URL : undefined;
 const socket = io(SERVER_URL);
@@ -749,8 +820,12 @@ document.addEventListener('deviceready', () => {
     musicManager.start(); // This usually works in Cordova
 
     // 4. Notification Logic (Firebasex)
+    console.log("DeviceReady: Checking for FirebasePlugin...");
     if (window.FirebasePlugin) {
+        console.log("DeviceReady: FirebasePlugin found. Calling checkNotificationPermission...");
         checkNotificationPermission();
+    } else {
+        console.error("DeviceReady: FirebasePlugin NOT found.");
     }
 }, false);
 
@@ -758,31 +833,47 @@ document.addEventListener('deviceready', () => {
 async function checkNotificationPermission() {
     const launchCount = parseInt(localStorage.getItem('app_launch_count') || '0') + 1;
     localStorage.setItem('app_launch_count', launchCount);
+    console.log(`checkNotificationPermission: Launch Count = ${launchCount}, stored status = ${localStorage.getItem('notification_permission_status')}`);
 
     const permStatus = localStorage.getItem('notification_permission_status'); // null, 'granted', 'later', 'denied'
 
     // Condition: No permission yet AND (Never asked OR (Status='later' AND launchCount % 5 == 0))
-    if (!permStatus || (permStatus === 'later' && launchCount % 5 === 0)) {
+    // DEBUG: Removed launchCount check for testing to force modal
+    // OR just log why we skip it.
+
+    const shouldAsk = !permStatus || (permStatus === 'later'); // && launchCount % 5 === 0); <-- DEBUG MODE: ALWAYS ASK IF LATER/NULL
+    console.log(`checkNotificationPermission: Should Ask? ${shouldAsk} (Bypassed 5-launch check for debugging)`);
+
+    if (shouldAsk) {
+        console.log("checkNotificationPermission: Showing Modal");
         // Show In-Game Modal
         showModal(
             'Enable Notifications?',
             'Get notified about game invites and friend requests when you are not playing!',
             async () => {
                 // Yes -> Request Permission
+                console.log("User clicked YES to notifications");
                 try {
+                    console.log("Requesting Firebase Permission...");
                     const hasPerm = await new Promise(resolve => window.FirebasePlugin.hasPermission(resolve));
+                    console.log(`Current Permission Status: ${hasPerm}`);
+
                     if (!hasPerm) {
                         await new Promise((resolve, reject) => window.FirebasePlugin.grantPermission(resolve, reject));
+                        console.log("Permission Granted by User (System Dialog)");
+                    } else {
+                        console.log("Permission was already granted internally.");
                     }
                     localStorage.setItem('notification_permission_status', 'granted');
                     registerFCM();
                 } catch (err) {
-                    console.error('Permission error:', err);
+                    console.error('Permission error flow:', err);
                     // If denied by system, maybe set 'denied'
                 }
             },
             () => {
                 // Later -> Store status
+                console.log("User clicked LATER");
                 localStorage.setItem('notification_permission_status', 'later');
             },
             'Yes, enable',
@@ -790,7 +881,10 @@ async function checkNotificationPermission() {
         );
     } else if (permStatus === 'granted') {
         // Already granted, ensure token is fresh
+        console.log("checkNotificationPermission: Status is GRANTED. Registering FCM...");
         registerFCM();
+    } else {
+        console.log(`checkNotificationPermission: Status is ${permStatus}. Doing nothing.`);
     }
 }
 
@@ -1014,7 +1108,8 @@ async function renderInviteList() {
         // Match main friends list: Online = isOnline flag AND active within 90 seconds
         const isOnline = friend.isOnline && diffSec < 90;
 
-        if (!isOnline) return;
+        // ALLOW OFFLINE INVITES (Removed filter)
+        // if (!isOnline) return;
 
         console.log(`Friend ${friend.username}: isOnline=${friend.isOnline}, diffSec=${diffSec}, calculated=${isOnline}`);
 

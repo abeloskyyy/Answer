@@ -3958,3 +3958,67 @@ select:focus {
     opacity: 0;
     pointer-events: none;
 }
+
+/* Debug Console */
+#debug-console {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 50vh;
+    background: rgba(0, 0, 0, 0.9);
+    color: #0f0;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border-top: 2px solid #0f0;
+}
+
+#debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+    background: #222;
+    border-bottom: 1px solid #444;
+}
+
+#debug-header span {
+    font-weight: bold;
+}
+
+.debug-actions button {
+    background: #444;
+    border: 1px solid #666;
+    color: white;
+    padding: 2px 8px;
+    margin-left: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+    width: auto;
+    font-size: 11px;
+}
+
+#debug-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-entry {
+    margin-bottom: 4px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 2px;
+}
+
+.log-error {
+    color: #ff6b6b;
+}
+
+.log-warn {
+    color: #feca57;
+}
