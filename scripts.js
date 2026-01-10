@@ -1302,37 +1302,42 @@ function showAuthError(msg) {
 const btnGoogleRegister = document.getElementById('btn-google-register');
 
 function handleGoogleSign() {
-    console.log('handleGoogleSign called. window.cordova:', !!window.cordova);
+    console.log('handleGoogleSign - Inciando...');
 
-    // 1. Native Login for Android/iOS APK
+    // 1. Login Nativo para APK
     if (window.cordova && window.plugins && window.plugins.googleplus) {
-        console.log('Using Native Google Login...');
+        const webId = '894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com';
+        console.log('Intentando Login Nativo con ID:', webId);
+
         window.plugins.googleplus.login(
             {
-                // Updated to match the type 3 client from your new google-services.json
-                'webClientId': '894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com',
+                'webClientId': webId,
                 'offline': false
             },
             function (obj) {
-                console.log('Native Google Success, sending to Firebase...');
+                console.log('¡Éxito Nativo! Autenticando en Firebase...');
                 const credential = firebase.auth.GoogleAuthProvider.credential(obj.idToken);
                 auth.signInWithCredential(credential)
                     .then(() => {
-                        console.log('Firebase Auth Success with Native Credential');
                         authModalOverlay.style.display = 'none';
+                        alert('¡Bienvenido ' + obj.displayName + '!');
                     })
                     .catch((error) => {
-                        console.error('Firebase Auth Error:', error);
-                        showAuthError('Firebase Auth Error: ' + (error.message || JSON.stringify(error)));
+                        const errText = 'Error Firebase: ' + error.code + ' - ' + error.message;
+                        console.error(errText);
+                        alert(errText); // Alerta visible en móvil
+                        showAuthError(errText);
                     });
             },
             function (msg) {
-                console.error('Native Google Error Details:', msg);
-                // Si es un objeto, lo convertimos a texto para verlo en el móvil
-                const errorDetail = (typeof msg === 'object') ? JSON.stringify(msg) : msg;
+                // El famoso Error 10
+                console.error('Detalles del Error de Google:', msg);
+                const errorStr = (typeof msg === 'object') ? JSON.stringify(msg) : String(msg);
 
                 if (msg !== '12501' && msg !== 'cancelled') {
-                    showAuthError('Google Native Error ' + errorDetail);
+                    const fullMsg = 'ERROR 10 (DEVELOPER_ERROR).\n\nCausas probables:\n1. Falta Email de Soporte en Firebase.\n2. SHA-1 no coincide en Firebase.\n3. Nombre de paquete (com.abelosky.answer) distinto.\n\nDetalle técnico: ' + errorStr;
+                    alert(fullMsg); // ¡ESTO ES LO QUE NECESITAMOS VER!
+                    showAuthError(fullMsg);
                 }
             }
         );
