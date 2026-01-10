@@ -10,6 +10,9 @@ const MOBILE_DIR = path.join(__dirname, PROJECT_NAME);
 const WEB_BUILD_DIR = path.join(__dirname, 'web-build');
 const WWW_DIR = path.join(MOBILE_DIR, 'www');
 const RELEASES_DIR = path.join(__dirname, 'mobile-releases');
+const LOGO_SQUARE = path.join(__dirname, 'assets/img/logo/logo-square.png');
+const GOOGLE_SERVICES_JSON = path.join(__dirname, 'google-services.json');
+const WEB_CLIENT_ID = "894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com";
 
 // ==========================================
 // CONFIGURACIÓN DE ENTORNO (AUTOMÁTICA)
@@ -86,6 +89,16 @@ function buildMobile() {
         runCommand('cordova platform add android', MOBILE_DIR);
     }
 
+    // NOTE: Google Auth in Cordova requires native plugins and Firebase configuration (SHA-1).
+    const pluginsDir = path.join(MOBILE_DIR, 'plugins');
+    if (!fs.existsSync(path.join(pluginsDir, 'cordova-plugin-googleplus'))) {
+        console.log('Adding Native Google login plugins...');
+
+        // The core native plugin for Google Login in Android/iOS
+        // For Android, we use the WEB_CLIENT_ID to get the ID token back
+        runCommand(`cordova plugin add cordova-plugin-googleplus --variable WEB_CLIENT_ID="${WEB_CLIENT_ID}"`, MOBILE_DIR);
+    }
+
     // 3. Clear 'www' and Copy Web Build
     console.log('Updating mobile assets...');
     // We keep config.xml and res, but we want to replace www content
@@ -122,6 +135,19 @@ function buildMobile() {
         copyRecursive(path.join(WEB_BUILD_DIR, child), path.join(WWW_DIR, child));
     });
 
+    // 3.5 Copy Mobile Resources (Icon & Splash)
+    console.log('Updating mobile resources (icons)...');
+    const resDir = path.join(MOBILE_DIR, 'res');
+    if (!fs.existsSync(resDir)) {
+        fs.mkdirSync(resDir);
+    }
+    if (fs.existsSync(LOGO_SQUARE)) {
+        fs.copyFileSync(LOGO_SQUARE, path.join(resDir, 'icon.png'));
+        console.log('Icon asset updated.');
+    } else {
+        console.warn('Warning: logo-square.png not found for mobile icon!');
+    }
+
     // 4. Inject Mobile Config
     console.log('Injecting Mobile Configuration...');
     const configPath = path.join(WWW_DIR, 'client-config.js');
@@ -151,6 +177,14 @@ window.GAME_CONFIG = {
     }
 
     console.log('Building Android APK...');
+
+    // Last check for google-services.json location before build
+    const googleDest = path.join(MOBILE_DIR, 'platforms/android/app/google-services.json');
+    if (fs.existsSync(GOOGLE_SERVICES_JSON) && fs.existsSync(path.dirname(googleDest))) {
+        console.log('Injecting google-services.json into Android build path...');
+        fs.copyFileSync(GOOGLE_SERVICES_JSON, googleDest);
+    }
+
     runCommand('cordova build android', MOBILE_DIR);
 
     // 7. Move APK to releases folder

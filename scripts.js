@@ -1302,13 +1302,43 @@ function showAuthError(msg) {
 const btnGoogleRegister = document.getElementById('btn-google-register');
 
 function handleGoogleSign() {
+    // 1. Native Login for Android/iOS APK
+    if (window.cordova && window.plugins && window.plugins.googleplus) {
+        window.plugins.googleplus.login(
+            {
+                'webClientId': '894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com',
+                'offline': false
+            },
+            function (obj) {
+                // Success: We got the Google ID Token
+                const credential = firebase.auth.GoogleAuthProvider.credential(obj.idToken);
+                auth.signInWithCredential(credential)
+                    .then(() => {
+                        console.log('Native Google Sign In Success');
+                        authModalOverlay.style.display = 'none';
+                    })
+                    .catch((error) => {
+                        console.error('Firebase Native Credential Error:', error);
+                        showAuthError(error.message);
+                    });
+            },
+            function (msg) {
+                // Error (e.g. user cancelled)
+                console.error('Native Google Error:', msg);
+                if (msg !== '12501' && msg !== 'cancelled') {
+                    showAuthError('Native Login Failed: ' + msg);
+                }
+            }
+        );
+        return;
+    }
+
+    // 2. Web Popup (Standard Web)
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider)
         .then((result) => {
-            // User signed in
             console.log('Google Sign In Success:', result.user);
             authModalOverlay.style.display = 'none';
-            // Auth watcher will handle the rest
         })
         .catch((error) => {
             console.error(error);
@@ -1369,6 +1399,16 @@ formRegister.addEventListener('submit', (e) => {
 });
 
 // 4. Auth State Observer
+// Handle Redirect Result (Important for Cordova)
+auth.getRedirectResult().then((result) => {
+    if (result && result.user) {
+        console.log('Handle redirect result success:', result.user.displayName);
+        authModalOverlay.style.display = 'none';
+    }
+}).catch((error) => {
+    console.error('Error handling redirect result:', error);
+});
+
 auth.onAuthStateChanged(async (user) => {
     updateLoginUI(user);
     if (user) {

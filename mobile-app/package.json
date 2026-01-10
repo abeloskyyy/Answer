@@ -13,11 +13,33 @@
   "author": "Apache Cordova Team",
   "license": "Apache-2.0",
   "devDependencies": {
-    "cordova-android": "^14.0.1"
+    "cordova-android": "^14.0.1",
+    "cordova-plugin-androidx": "^3.0.0",
+    "cordova-plugin-androidx-adapter": "^1.1.3",
+    "cordova-plugin-customurlscheme": "^5.0.2",
+    "cordova-plugin-googleplus": "^8.5.2",
+    "cordova-plugin-inappbrowser": "^6.0.0",
+    "cordova-support-google-services": "^1.4.1"
   },
   "cordova": {
     "platforms": [
       "android"
-    ]
+    ],
+    "plugins": {
+      "cordova-plugin-customurlscheme": {
+        "URL_SCHEME": "answer.abelosky.com",
+        "ANDROID_SCHEME": " ",
+        "ANDROID_HOST": " ",
+        "ANDROID_PATHPREFIX": "/"
+      },
+      "cordova-plugin-androidx": {},
+      "cordova-plugin-androidx-adapter": {},
+      "cordova-plugin-inappbrowser": {},
+      "cordova-plugin-googleplus": {
+        "WEB_CLIENT_ID": "894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com",
+        "PLAY_SERVICES_VERSION": "15.0.1"
+      },
+      "cordova-support-google-services": {}
+    }
   }
 }

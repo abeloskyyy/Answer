@@ -6,6 +6,29 @@
         Apache Cordova Team
     </author>
     <content src="index.html" />
+    
+    <!-- Icono Principal -->
+    <icon src="res/icon.png" />
+    
+    <!-- Configuración Splash Screen -->
+    <preference name="SplashScreen" value="screen" />
+    <preference name="AutoHideSplashScreen" value="true" />
+    <preference name="SplashScreenDelay" value="3000" />
+    <preference name="FadeSplashScreen" value="true" />
+    <preference name="FadeSplashScreenDuration" value="300" />
+    <preference name="SplashMaintainAspectRatio" value="true" />
+    
+    <platform name="android">
+        <allow-intent href="market:*" />
+        <icon src="res/icon.png" />
+        <preference name="SplashShowOnlyFirstTime" value="false" />
+        <preference name="android-minSdkVersion" value="24" />
+        <preference name="android-targetSdkVersion" value="35" />
+        <!-- Android 12+ Splash Screen -->
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
+        <preference name="AndroidWindowSplashScreenBackground" value="#0f172a" />
+    </platform>
+    
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
 </widget>
