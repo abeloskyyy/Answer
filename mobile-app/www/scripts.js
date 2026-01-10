@@ -1320,13 +1320,10 @@ function handleGoogleSign() {
                 auth.signInWithCredential(credential)
                     .then(() => {
                         authModalOverlay.style.display = 'none';
-                        alert('¡Bienvenido ' + obj.displayName + '!');
                     })
                     .catch((error) => {
-                        const errText = 'Error Firebase: ' + error.code + ' - ' + error.message;
-                        console.error(errText);
-                        alert(errText); // Alerta visible en móvil
-                        showAuthError(errText);
+                        console.error('Firebase Auth Error:', error);
+                        showAuthError('Login Error: ' + error.message);
                     });
             },
             function (msg) {
@@ -1335,9 +1332,8 @@ function handleGoogleSign() {
                 const errorStr = (typeof msg === 'object') ? JSON.stringify(msg) : String(msg);
 
                 if (msg !== '12501' && msg !== 'cancelled') {
-                    const fullMsg = 'ERROR 10 (DEVELOPER_ERROR).\n\nCausas probables:\n1. Falta Email de Soporte en Firebase.\n2. SHA-1 no coincide en Firebase.\n3. Nombre de paquete (com.abelosky.answer) distinto.\n\nDetalle técnico: ' + errorStr;
-                    alert(fullMsg); // ¡ESTO ES LO QUE NECESITAMOS VER!
-                    showAuthError(fullMsg);
+                    console.error('Native Google Error:', msg);
+                    showAuthError('Google Login Error: ' + (typeof msg === 'object' ? JSON.stringify(msg) : msg));
                 }
             }
         );
