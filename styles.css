@@ -764,6 +764,7 @@ select:focus {
         padding: 12px;
         gap: 10px;
         margin-bottom: 10px;
+        margin-top: 18px;
     }
 
     .room-header-top {

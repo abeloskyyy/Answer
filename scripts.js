@@ -906,10 +906,76 @@ async function registerFCM() {
         // Listen for foreground notifications
         window.FirebasePlugin.onMessageReceived((message) => {
             console.log("Notification received:", message);
-            if (message.messageType === 'notification') {
-                const text = message.body || message.alert;
-                // Show a toast or in-game message
-                showFeedback(document.body, `Notification: ${text}`, 'success'); // Quick hack to show it
+
+            // Extract text robustly
+            let text = "New Notification";
+            let title = "Game";
+
+            if (message.body) text = message.body;
+            else if (message.alert) text = message.alert;
+            else if (message.notification && message.notification.body) text = message.notification.body;
+
+            if (message.title) title = message.title;
+            else if (message.notification && message.notification.title) title = message.notification.title;
+
+            // Handle Foreground vs Background/Tap
+            if (message.tap) {
+                console.log("User tapped notification. Payload:", message);
+
+                // Deep Linking Logic
+                const type = message.type || (message.data && message.data.type);
+                const roomId = message.roomId || (message.data && message.data.roomId);
+
+                if (type === 'friend_request') {
+                    // Open Friends Modal -> Requests Tab
+                    const btnFriends = document.getElementById('btn-friends');
+                    if (btnFriends) {
+                        // Simulate opening friends
+                        document.getElementById('friends-modal-overlay').style.display = 'flex';
+                        // Switch to requests tab
+                        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.auth-form').forEach(f => {
+                            f.style.display = 'none';
+                            f.classList.remove('active');
+                        });
+
+                        const reqTab = document.querySelector('[data-tab="tab-friend-requests"]');
+                        if (reqTab) reqTab.classList.add('active');
+
+                        const reqContent = document.getElementById('tab-friend-requests');
+                        if (reqContent) {
+                            reqContent.style.display = 'block';
+                            reqContent.classList.add('active');
+                        }
+                    }
+                } else if (type === 'invite' && roomId) {
+                    showModal('Game Invite', `Join room ${roomId}?`, () => {
+                        socket.emit('join_room', {
+                            username: currentUser.username,
+                            roomId: roomId,
+                            avatar: currentUser.photoURL,
+                            uuid: currentUser.uid
+                        });
+                    }, null, "Join Game");
+                } else if (roomId) {
+                    showModal('Game Invite', `Join room ${roomId}?`, () => {
+                        socket.emit('join_room', {
+                            username: currentUser.username,
+                            roomId: roomId,
+                            avatar: currentUser.photoURL,
+                            uuid: currentUser.uid
+                        });
+                    }, null, "Join Game");
+                } else {
+                    // Generic
+                    // If just tapped generic info, maybe just open app silently? 
+                    // Or show the message again if they tapped it?
+                    // Let's show it so they know what it was.
+                    showModal(title, text, () => { }, null, "OK");
+                }
+            } else {
+                // Foreground arrival
+                showFeedback(document.body, `${title}: ${text}`, 'success');
             }
         }, (err) => console.error(err));
 
