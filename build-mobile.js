@@ -11,6 +11,7 @@ const WEB_BUILD_DIR = path.join(__dirname, 'web-build');
 const WWW_DIR = path.join(MOBILE_DIR, 'www');
 const RELEASES_DIR = path.join(__dirname, 'mobile-releases');
 const LOGO_SQUARE = path.join(__dirname, 'assets/img/logo/logo-square.png');
+const LOGO_RECT = path.join(__dirname, 'assets/img/logo/logo.png');
 const GOOGLE_SERVICES_JSON = path.join(__dirname, 'google-services.json');
 const WEB_CLIENT_ID = "894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com";
 
@@ -139,16 +140,24 @@ function buildMobile() {
     });
 
     // 3.5 Copy Mobile Resources (Icon & Splash)
-    console.log('Updating mobile resources (icons)...');
+    console.log('Updating mobile resources (icons & splash)...');
     const resDir = path.join(MOBILE_DIR, 'res');
-    if (!fs.existsSync(resDir)) {
-        fs.mkdirSync(resDir);
-    }
+    const resourcesDir = path.join(MOBILE_DIR, 'resources');
+
+    if (!fs.existsSync(resDir)) fs.mkdirSync(resDir);
+    if (!fs.existsSync(resourcesDir)) fs.mkdirSync(resourcesDir);
+
+    // Copy to 'res' (Directly used by config.xml in my setup)
     if (fs.existsSync(LOGO_SQUARE)) {
         fs.copyFileSync(LOGO_SQUARE, path.join(resDir, 'icon.png'));
-        console.log('Icon asset updated.');
-    } else {
-        console.warn('Warning: logo-square.png not found for mobile icon!');
+        fs.copyFileSync(LOGO_SQUARE, path.join(resourcesDir, 'icon.png'));
+        console.log('✔ Icon assets updated.');
+    }
+
+    if (fs.existsSync(LOGO_RECT)) {
+        fs.copyFileSync(LOGO_RECT, path.join(resDir, 'splash.png'));
+        fs.copyFileSync(LOGO_RECT, path.join(resourcesDir, 'splash.png'));
+        console.log('✔ Splash assets updated.');
     }
 
     // 4. Inject Mobile Config
