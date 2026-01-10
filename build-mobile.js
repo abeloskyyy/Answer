@@ -97,6 +97,9 @@ function buildMobile() {
         // The core native plugin for Google Login in Android/iOS
         // For Android, we use the WEB_CLIENT_ID to get the ID token back
         runCommand(`cordova plugin add cordova-plugin-googleplus --variable WEB_CLIENT_ID="${WEB_CLIENT_ID}"`, MOBILE_DIR);
+
+        // Plugin to help with google-services.json integration
+        runCommand('cordova plugin add cordova-support-google-services', MOBILE_DIR);
     }
 
     // 3. Clear 'www' and Copy Web Build

@@ -1302,28 +1302,30 @@ function showAuthError(msg) {
 const btnGoogleRegister = document.getElementById('btn-google-register');
 
 function handleGoogleSign() {
+    console.log('handleGoogleSign called. window.cordova:', !!window.cordova);
+
     // 1. Native Login for Android/iOS APK
     if (window.cordova && window.plugins && window.plugins.googleplus) {
+        console.log('Using Native Google Login...');
         window.plugins.googleplus.login(
             {
                 'webClientId': '894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com',
                 'offline': false
             },
             function (obj) {
-                // Success: We got the Google ID Token
+                console.log('Native Google Success, sending to Firebase...');
                 const credential = firebase.auth.GoogleAuthProvider.credential(obj.idToken);
                 auth.signInWithCredential(credential)
                     .then(() => {
-                        console.log('Native Google Sign In Success');
+                        console.log('Firebase Auth Success with Native Credential');
                         authModalOverlay.style.display = 'none';
                     })
                     .catch((error) => {
-                        console.error('Firebase Native Credential Error:', error);
+                        console.error('Firebase Auth Error:', error);
                         showAuthError(error.message);
                     });
             },
             function (msg) {
-                // Error (e.g. user cancelled)
                 console.error('Native Google Error:', msg);
                 if (msg !== '12501' && msg !== 'cancelled') {
                     showAuthError('Native Login Failed: ' + msg);
@@ -1333,7 +1335,8 @@ function handleGoogleSign() {
         return;
     }
 
-    // 2. Web Popup (Standard Web)
+    // 2. Web Popup (Standard Web fallback)
+    console.log('Falling back to Web Popup Login...');
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider)
         .then((result) => {
