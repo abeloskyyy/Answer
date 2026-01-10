@@ -1309,6 +1309,7 @@ function handleGoogleSign() {
         console.log('Using Native Google Login...');
         window.plugins.googleplus.login(
             {
+                // Updated to match the type 3 client from your new google-services.json
                 'webClientId': '894472877590-1v7gpel3b3g1en187vrji33krfk8q97j.apps.googleusercontent.com',
                 'offline': false
             },
@@ -1322,13 +1323,16 @@ function handleGoogleSign() {
                     })
                     .catch((error) => {
                         console.error('Firebase Auth Error:', error);
-                        showAuthError(error.message);
+                        showAuthError('Firebase Auth Error: ' + (error.message || JSON.stringify(error)));
                     });
             },
             function (msg) {
-                console.error('Native Google Error:', msg);
+                console.error('Native Google Error Details:', msg);
+                // Si es un objeto, lo convertimos a texto para verlo en el móvil
+                const errorDetail = (typeof msg === 'object') ? JSON.stringify(msg) : msg;
+
                 if (msg !== '12501' && msg !== 'cancelled') {
-                    showAuthError('Native Login Failed: ' + msg);
+                    showAuthError('Google Native Error ' + errorDetail);
                 }
             }
         );
