@@ -175,7 +175,8 @@ body {
 }
 
 .game-logo {
-    max-width: 350px;
+    max-width: 500px;
+    width: 90%;
     height: auto;
     filter: drop-shadow(0 8px 20px rgba(108, 92, 231, 0.3));
     animation: floating 4s ease-in-out infinite;
@@ -195,7 +196,7 @@ body {
 
 @media (max-width: 768px) {
     .game-logo {
-        max-width: 250px;
+        max-width: 300px;
     }
 }
 
@@ -1879,13 +1880,13 @@ select:focus {
    GAME OVER PODIUM
    ========================= */
 .game-over-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background: radial-gradient(circle, #2d3436 0%, #000000 100%);
-    z-index: 2000;
+    z-index: 5000;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1913,7 +1914,7 @@ select:focus {
 
 .podium-title {
     color: #fdcb6e;
-    font-size: 3rem;
+    font-size: 5rem;
     margin-bottom: 120px;
     margin-top: 0;
     text-shadow: 0 0 10px rgba(253, 203, 110, 0.5);
@@ -2096,7 +2097,7 @@ select:focus {
     }
 
     .podium-title {
-        font-size: 2rem;
+        font-size: 2.8rem;
         margin-bottom: 75px;
         margin-top: 0;
     }
@@ -3477,7 +3478,7 @@ select:focus {
     }
 
     .podium-title {
-        font-size: 2.2rem;
+        font-size: 3rem;
         margin-bottom: 60px;
     }
 }
@@ -3488,7 +3489,7 @@ select:focus {
     }
 
     .game-logo {
-        max-width: 180px;
+        max-width: 220px;
         margin-bottom: 15px;
     }
 
@@ -3568,7 +3569,7 @@ select:focus {
     }
 
     .podium-title {
-        font-size: 1.8rem;
+        font-size: 2.2rem;
         margin-bottom: 40px;
     }
 }
