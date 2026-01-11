@@ -1,77 +1,16 @@
-// Debug Console Logic (Mobile)
-(function () {
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-
-    function appendToDebug(type, args) {
-        const debugContent = document.getElementById('debug-content');
-        const debugConsole = document.getElementById('debug-console');
-        if (!debugConsole || !debugContent || debugConsole.style.display === 'none') {
-            // Keep buffer or just ignore if hidden to save performance? 
-            // Better to append always so we can see past logs when opening.
-        }
-        if (!debugContent) return;
-
-        const msg = args.map(arg => {
-            if (typeof arg === 'object') {
-                try {
-                    return JSON.stringify(arg);
-                } catch (e) {
-                    return '[Object]';
-                }
-            }
-            return String(arg);
-        }).join(' ');
-
-        const entry = document.createElement('div');
-        entry.className = `log-entry log-${type}`;
-        entry.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${msg}`;
-        debugContent.appendChild(entry);
-        // Auto scroll
-        debugContent.scrollTop = debugContent.scrollHeight;
-    }
-
-    console.log = function (...args) {
-        originalLog.apply(console, args);
-        appendToDebug('info', args);
-    };
-
-    console.error = function (...args) {
-        originalError.apply(console, args);
-        appendToDebug('error', args);
-    };
-
-    console.warn = function (...args) {
-        originalWarn.apply(console, args);
-        appendToDebug('warn', args);
-    };
-})();
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Debug UI Events
-    const btnClose = document.getElementById('btn-close-debug');
-    const btnClear = document.getElementById('btn-clear-debug');
-    const debugConsole = document.getElementById('debug-console');
-
-    if (btnClose) btnClose.onclick = () => debugConsole.style.display = 'none';
-    if (btnClear) btnClear.onclick = () => document.getElementById('debug-content').innerHTML = '';
-
-    // Mobile specific: Open debug with 3 finger tap or hidden button? 
-    // We added a button in Settings, let's wire it up here if it exists.
-    const btnOpenDebug = document.getElementById('btn-open-debug');
-    if (btnOpenDebug) {
-        btnOpenDebug.onclick = () => {
-            debugConsole.style.display = 'flex';
-            // Also close settings modal
-            document.getElementById('settings-modal-overlay').style.display = 'none';
-        }
-    }
-});
-
 // Use configured server URL or default to window origin (automatic for web, manual for mobile)
+const APP_VERSION = '1.0.0'; // IMPORTANT: Keep this in sync with config.xml version
+
+
 const SERVER_URL = (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) ? window.GAME_CONFIG.SERVER_URL : undefined;
-const socket = io(SERVER_URL);
+
+const socket = io(SERVER_URL, {
+    transports: ['websocket', 'polling'], // Try websocket first, then polling
+    reconnection: true,
+    reconnectionAttempts: 10,
+    timeout: 10000,
+    forceNew: true
+});
 
 // Reconnection handling for mobile app switching
 let reconnectAttempts = 0;
@@ -166,7 +105,109 @@ function showReconnectingMessage() {
     reconnectMsg.style.display = 'block';
 }
 
+function hideReconnectingMessage() {
+    const reconnectMsg = document.getElementById('reconnect-message');
+    if (reconnectMsg) {
+        reconnectMsg.style.display = 'none';
+    }
+}
+
+// ============================================
+// DEEP LINK HANDLING (Mobile App)
+// ============================================
+// Handle deep links: answer://open?c=ROOMCODE or https://answer.abelosky.com/?c=ROOMCODE
+function handleDeepLink(url) {
+    console.log('Deep link received:', url);
+
+    if (!url) return;
+
+    // Extract room code from URL
+    let roomCode = null;
+
+    // Handle custom scheme: answer://open?c=CODE
+    if (url.includes('answer://')) {
+        const match = url.match(/[?&]c=([A-Z0-9]+)/i);
+        if (match) roomCode = match[1].toUpperCase();
+    }
+    // Handle HTTPS universal link: https://answer.abelosky.com/?c=CODE
+    else if (url.includes('answer.abelosky.com')) {
+        const match = url.match(/[?&]c=([A-Z0-9]+)/i);
+        if (match) roomCode = match[1].toUpperCase();
+    }
+
+    if (roomCode) {
+        console.log('Room code from deep link:', roomCode);
+
+        // Store the room code to join after login
+        localStorage.setItem('pendingRoomCode', roomCode);
+
+        // If user is already logged in and on lobby, join immediately
+        if (myUsername && document.getElementById('lobby-section').classList.contains('active')) {
+            joinRoomFromDeepLink(roomCode);
+        }
+        // Otherwise, the room will be joined after login (see login flow)
+    }
+}
+
+function joinRoomFromDeepLink(roomCode) {
+    console.log('Joining room from deep link:', roomCode);
+
+    // Clear the pending code
+    localStorage.removeItem('pendingRoomCode');
+
+    // Ensure we're on the lobby screen
+    if (!document.getElementById('lobby-section').classList.contains('active')) {
+        switchScreen('lobby-section');
+    }
+
+    // Auto-fill and join
+    const roomCodeInput = document.getElementById('room-code-input');
+    if (roomCodeInput) {
+        roomCodeInput.value = roomCode;
+        // Trigger join
+        setTimeout(() => {
+            const btnJoinRoom = document.getElementById('btn-join-room');
+            if (btnJoinRoom && !btnJoinRoom.disabled) {
+                btnJoinRoom.click();
+            }
+        }, 500);
+    }
+}
+
+// Listen for deep link events (Cordova)
+document.addEventListener('deviceready', function () {
+    console.log('Device ready - setting up deep link handler');
+
+    // Handle deep link when app is opened via link
+    window.handleOpenURL = function (url) {
+        console.log('handleOpenURL called with:', url);
+        setTimeout(function () {
+            handleDeepLink(url);
+        }, 0);
+    };
+
+    // Check if app was launched with a deep link
+    if (window.plugins && window.plugins.launchUrl) {
+        window.plugins.launchUrl(function (url) {
+            console.log('App launched with URL:', url);
+            handleDeepLink(url);
+        });
+    }
+}, false);
+
+// Check for pending room code after successful login
+function checkPendingDeepLink() {
+    const pendingCode = localStorage.getItem('pendingRoomCode');
+    if (pendingCode && myUsername) {
+        console.log('Found pending room code after login:', pendingCode);
+        joinRoomFromDeepLink(pendingCode);
+    }
+}
+
+// ============================================
 // FRIENDS SYSTEM LOGIC (Appended)
+// ============================================
+
 
 const searchFriendInput = document.getElementById('search-friend-input');
 const btnSendFriendRequest = document.getElementById('btn-send-friend-request');
@@ -827,64 +868,116 @@ document.addEventListener('deviceready', () => {
     } else {
         console.error("DeviceReady: FirebasePlugin NOT found.");
     }
+
+    // 5. Check for Updates
+    checkUpdate();
 }, false);
 
+// Update Check Logic
+async function checkUpdate() {
+    // Only check for updates in Cordova environment
+    if (!window.cordova) return;
+
+    console.log('Checking for updates...');
+    try {
+        const baseUrl = (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) ? window.GAME_CONFIG.SERVER_URL : '';
+        const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+        // Fetch version history with a timestamp to avoid caching
+        const response = await fetch(`${cleanBase}/version_history.json?t=${Date.now()}`);
+        if (!response.ok) throw new Error('Version file not found');
+
+        const history = await response.json();
+        // Find the version marked as latest
+        const latest = history.find(v => v.latest === true);
+
+        if (latest && compareVersions(latest.version, APP_VERSION) > 0) {
+            console.log(`Update available: ${latest.version} (Current: ${APP_VERSION})`);
+
+            showModal(
+                'New version available!',
+                `Version ${latest.version}:\n${latest.notes}\n\nDo you want to update now?`,
+                () => {
+                    // Open URL in system browser (Play Store or APK download)
+                    window.open(latest.downloadUrl, '_system');
+
+                    // If critical, re-show modal if they come back (or don't allow closing easily)
+                    if (latest.critical) {
+                        setTimeout(() => checkUpdate(), 1000);
+                    }
+                },
+                () => {
+                    // Cancel callback
+                    if (latest.critical) {
+                        // Reshow immediately if critical
+                        showModal(
+                            'Required update',
+                            'This update is required to continue playing.',
+                            () => { window.open(latest.downloadUrl, '_system'); setTimeout(() => checkUpdate(), 500); },
+                            () => checkUpdate(), // Loop back
+                            'Update',
+                            null // Hide cancel button visually or just loop
+                        );
+                    }
+                },
+                'Update',
+                latest.critical ? null : 'Later'
+            );
+        } else {
+            console.log('App is up to date.');
+        }
+    } catch (e) {
+        console.error('Error checking for updates:', e);
+    }
+}
+
+// Semver comparison helper
+function compareVersions(v1, v2) {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+        const n1 = parts1[i] || 0;
+        const n2 = parts2[i] || 0;
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    return 0;
+}
+
+// Notification Permission & Token Logic
 // Notification Permission & Token Logic
 async function checkNotificationPermission() {
     const launchCount = parseInt(localStorage.getItem('app_launch_count') || '0') + 1;
     localStorage.setItem('app_launch_count', launchCount);
-    console.log(`checkNotificationPermission: Launch Count = ${launchCount}, stored status = ${localStorage.getItem('notification_permission_status')}`);
 
     const permStatus = localStorage.getItem('notification_permission_status'); // null, 'granted', 'later', 'denied'
 
-    // Condition: No permission yet AND (Never asked OR (Status='later' AND launchCount % 5 == 0))
-    // DEBUG: Removed launchCount check for testing to force modal
-    // OR just log why we skip it.
-
-    const shouldAsk = !permStatus || (permStatus === 'later'); // && launchCount % 5 === 0); <-- DEBUG MODE: ALWAYS ASK IF LATER/NULL
-    console.log(`checkNotificationPermission: Should Ask? ${shouldAsk} (Bypassed 5-launch check for debugging)`);
-
-    if (shouldAsk) {
-        console.log("checkNotificationPermission: Showing Modal");
-        // Show In-Game Modal
+    // Ask if first time OR every 5 launches if they said 'later'
+    if (!permStatus || (permStatus === 'later' && launchCount % 5 === 0)) {
         showModal(
             'Enable Notifications?',
             'Get notified about game invites and friend requests when you are not playing!',
             async () => {
-                // Yes -> Request Permission
-                console.log("User clicked YES to notifications");
                 try {
-                    console.log("Requesting Firebase Permission...");
                     const hasPerm = await new Promise(resolve => window.FirebasePlugin.hasPermission(resolve));
-                    console.log(`Current Permission Status: ${hasPerm}`);
-
                     if (!hasPerm) {
                         await new Promise((resolve, reject) => window.FirebasePlugin.grantPermission(resolve, reject));
-                        console.log("Permission Granted by User (System Dialog)");
-                    } else {
-                        console.log("Permission was already granted internally.");
                     }
                     localStorage.setItem('notification_permission_status', 'granted');
                     registerFCM();
                 } catch (err) {
-                    console.error('Permission error flow:', err);
-                    // If denied by system, maybe set 'denied'
+                    console.error('Permission error:', err);
                 }
             },
             () => {
-                // Later -> Store status
-                console.log("User clicked LATER");
                 localStorage.setItem('notification_permission_status', 'later');
             },
             'Yes, enable',
             'Not now'
         );
     } else if (permStatus === 'granted') {
-        // Already granted, ensure token is fresh
-        console.log("checkNotificationPermission: Status is GRANTED. Registering FCM...");
         registerFCM();
-    } else {
-        console.log(`checkNotificationPermission: Status is ${permStatus}. Doing nothing.`);
     }
 }
 
@@ -1529,6 +1622,9 @@ function handleGuestLogin() {
         // We use the Firebase UID as the unique identifier for the server to map sockets
         socket.emit('login', { name: myUsername, uuid: myUUID });
         switchScreen('lobby-section');
+
+        // Check if there's a pending deep link room code
+        checkPendingDeepLink();
     } else {
         showModal('Error', 'Please enter a username!');
     }
@@ -1877,6 +1973,9 @@ btnPlayAuth.addEventListener('click', () => {
     // Just proceed to lobby, user data is already set
     socket.emit('login', { name: myUsername, uuid: myUUID });
     switchScreen('lobby-section');
+
+    // Check if there's a pending deep link room code
+    checkPendingDeepLink();
 });
 
 // 6. Logout
@@ -2219,15 +2318,28 @@ btnCopyCode.addEventListener('click', () => {
     });
 });
 
-btnShareRoom.addEventListener('click', () => {
+btnShareRoom.addEventListener('click', async () => {
     const shareUrl = `${window.location.origin}/?c=${currentRoomId}`;
-    const shareData = { title: 'Join Answer!', text: `Play Answer with me! Code: ${currentRoomId}`, url: shareUrl };
-    if (navigator.share) navigator.share(shareData);
-    else {
-        navigator.clipboard.writeText(`Join me in Answer! ${shareUrl}`);
-        const originalIcon = btnShareRoom.innerHTML;
-        btnShareRoom.innerHTML = '<i class="fa-solid fa-check"></i>';
-        setTimeout(() => btnShareRoom.innerHTML = originalIcon, 1500);
+    const shareData = {
+        title: 'Join Answer!',
+        text: `Play Answer with me! Code: ${currentRoomId}`,
+        url: shareUrl
+    };
+
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+            console.log('Content shared successfully');
+        } catch (err) {
+            // User cancelled the share or an error occurred
+            if (err.name !== 'AbortError') {
+                console.error('Error sharing:', err);
+                showModal('Share Error', 'Could not share the room. Please try again.');
+            }
+        }
+    } else {
+        // Browser doesn't support Web Share API
+        showModal('Share Not Available', 'Your browser does not support native sharing. Please copy the room code manually: ' + currentRoomId);
     }
 });
 
