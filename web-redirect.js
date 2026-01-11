@@ -31,50 +31,71 @@
             // Get room code from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             const roomCode = urlParams.get('c');
+            const codeParam = roomCode ? `?c=${roomCode.toUpperCase()}` : '';
 
-            // Build deep link URL
-            let deepLinkUrl = 'answer://open';
-            if (roomCode) {
-                deepLinkUrl += '?c=' + roomCode.toUpperCase();
-            }
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-            // Try to open the app
-            const startTime = Date.now();
-            let hasFocused = false;
+            if (isAndroid) {
+                // ANDROID: Use Intent URL Scheme
+                // This lets Chrome handle the "Open in App" or "Stay in Browser" logic natively
+                // Format: intent://<HOST>#Intent;scheme=<SCHEME>;package=<PACKAGE>;S.browser_fallback_url=<url>;end
+                // We point fallback to the current URL so user stays here if no app
+                // But we append a flag to prevent infinite loop if we wanted (though logic below handles it)
 
-            // Listen for visibility change (app opened successfully)
-            const onVisibilityChange = function () {
-                if (document.hidden) {
+                const fallbackUrl = window.location.href;
+                const intentUrl = `intent://open${codeParam}#Intent;scheme=answer;package=com.abelosky.answer;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+
+                window.location.href = intentUrl;
+
+                // Note: On Android with Intents, we don't strictly *need* the timeout/banner logic 
+                // because if the app isn't installed, Chrome just reloads the fallback URL (current page).
+                // However, the user might simply stay on the page. We can still show the banner 
+                // just in case they are here (meaning app didn't open).
+                setTimeout(() => {
+                    if (!document.hidden) {
+                        showAppInstallBanner(roomCode);
+                    }
+                }, 1000);
+
+            } else {
+                // iOS / OTHERS: Use Custom Scheme with Timeout
+                const deepLinkUrl = `answer://open${codeParam}`;
+
+                // Try to open the app
+                const startTime = Date.now();
+                let hasFocused = false;
+
+                const onVisibilityChange = function () {
+                    if (document.hidden) hasFocused = true;
+                };
+
+                const onBlur = function () {
                     hasFocused = true;
-                }
-            };
+                };
 
-            const onBlur = function () {
-                hasFocused = true;
-            };
+                document.addEventListener('visibilitychange', onVisibilityChange);
+                window.addEventListener('blur', onBlur);
+                window.addEventListener('pagehide', onBlur);
 
-            document.addEventListener('visibilitychange', onVisibilityChange);
-            window.addEventListener('blur', onBlur);
-            window.addEventListener('pagehide', onBlur);
+                // Attempt to open the app
+                window.location.href = deepLinkUrl;
 
-            // Attempt to open the app
-            window.location.href = deepLinkUrl;
+                // If app didn't open after 2.5 seconds, assume it's not installed
+                setTimeout(function () {
+                    document.removeEventListener('visibilitychange', onVisibilityChange);
+                    window.removeEventListener('blur', onBlur);
+                    window.removeEventListener('pagehide', onBlur);
 
-            // If app didn't open after 2.5 seconds, assume it's not installed
-            setTimeout(function () {
-                document.removeEventListener('visibilitychange', onVisibilityChange);
-                window.removeEventListener('blur', onBlur);
-                window.removeEventListener('pagehide', onBlur);
+                    const elapsed = Date.now() - startTime;
 
-                const elapsed = Date.now() - startTime;
-
-                // If the page is still visible and focused, app probably isn't installed
-                if (!hasFocused && !document.hidden && elapsed < 3500) {
-                    console.log('App not detected, showing install banner');
-                    // Optionally show a banner suggesting to install the app
-                    showAppInstallBanner(roomCode);
-                }
-            }, 2500);
+                    // If the page is still visible and focused, app probably isn't installed
+                    if (!hasFocused && !document.hidden && elapsed < 3500) {
+                        console.log('App not detected, showing install banner');
+                        showAppInstallBanner(roomCode);
+                    }
+                }, 2500);
+            }
         }
     }
 
