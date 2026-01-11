@@ -1,15 +1,7 @@
 [
     {
-        "version": "1.0.1",
-        "latest": true,
-        "releaseDate": "2026-01-11",
-        "downloadUrl": "https://google.com",
-        "notes": "Official Release! \n\n- New Multiplayer Mode: Compete in real-time.\n- Friends System: Add your friends and challenge them.\n- Performance improvements and bug fixes.",
-        "critical": false
-    },
-    {
         "version": "1.0.0",
-        "latest": false,
+        "latest": true,
         "releaseDate": "2026-01-11",
         "downloadUrl": "https://github.com/abeloskyyy/Answer/releases/download/v1.0.0-alpha/answer-1.0.0-alpha.apk",
         "notes": "Official Release! \n\n- New Multiplayer Mode: Compete in real-time.\n- Friends System: Add your friends and challenge them.\n- Performance improvements and bug fixes.",
