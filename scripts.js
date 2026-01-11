@@ -105,109 +105,7 @@ function showReconnectingMessage() {
     reconnectMsg.style.display = 'block';
 }
 
-function hideReconnectingMessage() {
-    const reconnectMsg = document.getElementById('reconnect-message');
-    if (reconnectMsg) {
-        reconnectMsg.style.display = 'none';
-    }
-}
-
-// ============================================
-// DEEP LINK HANDLING (Mobile App)
-// ============================================
-// Handle deep links: answer://open?c=ROOMCODE or https://answer.abelosky.com/?c=ROOMCODE
-function handleDeepLink(url) {
-    console.log('Deep link received:', url);
-
-    if (!url) return;
-
-    // Extract room code from URL
-    let roomCode = null;
-
-    // Handle custom scheme: answer://open?c=CODE
-    if (url.includes('answer://')) {
-        const match = url.match(/[?&]c=([A-Z0-9]+)/i);
-        if (match) roomCode = match[1].toUpperCase();
-    }
-    // Handle HTTPS universal link: https://answer.abelosky.com/?c=CODE
-    else if (url.includes('answer.abelosky.com')) {
-        const match = url.match(/[?&]c=([A-Z0-9]+)/i);
-        if (match) roomCode = match[1].toUpperCase();
-    }
-
-    if (roomCode) {
-        console.log('Room code from deep link:', roomCode);
-
-        // Store the room code to join after login
-        localStorage.setItem('pendingRoomCode', roomCode);
-
-        // If user is already logged in and on lobby, join immediately
-        if (myUsername && document.getElementById('lobby-section').classList.contains('active')) {
-            joinRoomFromDeepLink(roomCode);
-        }
-        // Otherwise, the room will be joined after login (see login flow)
-    }
-}
-
-function joinRoomFromDeepLink(roomCode) {
-    console.log('Joining room from deep link:', roomCode);
-
-    // Clear the pending code
-    localStorage.removeItem('pendingRoomCode');
-
-    // Ensure we're on the lobby screen
-    if (!document.getElementById('lobby-section').classList.contains('active')) {
-        switchScreen('lobby-section');
-    }
-
-    // Auto-fill and join
-    const roomCodeInput = document.getElementById('room-code-input');
-    if (roomCodeInput) {
-        roomCodeInput.value = roomCode;
-        // Trigger join
-        setTimeout(() => {
-            const btnJoinRoom = document.getElementById('btn-join-room');
-            if (btnJoinRoom && !btnJoinRoom.disabled) {
-                btnJoinRoom.click();
-            }
-        }, 500);
-    }
-}
-
-// Listen for deep link events (Cordova)
-document.addEventListener('deviceready', function () {
-    console.log('Device ready - setting up deep link handler');
-
-    // Handle deep link when app is opened via link
-    window.handleOpenURL = function (url) {
-        console.log('handleOpenURL called with:', url);
-        setTimeout(function () {
-            handleDeepLink(url);
-        }, 0);
-    };
-
-    // Check if app was launched with a deep link
-    if (window.plugins && window.plugins.launchUrl) {
-        window.plugins.launchUrl(function (url) {
-            console.log('App launched with URL:', url);
-            handleDeepLink(url);
-        });
-    }
-}, false);
-
-// Check for pending room code after successful login
-function checkPendingDeepLink() {
-    const pendingCode = localStorage.getItem('pendingRoomCode');
-    if (pendingCode && myUsername) {
-        console.log('Found pending room code after login:', pendingCode);
-        joinRoomFromDeepLink(pendingCode);
-    }
-}
-
-// ============================================
 // FRIENDS SYSTEM LOGIC (Appended)
-// ============================================
-
 
 const searchFriendInput = document.getElementById('search-friend-input');
 const btnSendFriendRequest = document.getElementById('btn-send-friend-request');
@@ -1622,9 +1520,6 @@ function handleGuestLogin() {
         // We use the Firebase UID as the unique identifier for the server to map sockets
         socket.emit('login', { name: myUsername, uuid: myUUID });
         switchScreen('lobby-section');
-
-        // Check if there's a pending deep link room code
-        checkPendingDeepLink();
     } else {
         showModal('Error', 'Please enter a username!');
     }
@@ -1973,9 +1868,6 @@ btnPlayAuth.addEventListener('click', () => {
     // Just proceed to lobby, user data is already set
     socket.emit('login', { name: myUsername, uuid: myUUID });
     switchScreen('lobby-section');
-
-    // Check if there's a pending deep link room code
-    checkPendingDeepLink();
 });
 
 // 6. Logout
