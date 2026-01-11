@@ -14,59 +14,75 @@
 
     // Don't redirect if already in the app
     function isInApp() {
-        return window.cordova !== undefined;
+        // Robust detection: Cordova/Capacitor apps often use file: or custom schemes
+        return window.cordova !== undefined ||
+            window.location.protocol === 'file:' ||
+            window.location.protocol.includes('content') ||
+            navigator.standalone; // iOS "Add to Home Screen"
     }
 
-    if (isMobileDevice() && !isInApp()) {
-        console.log('Mobile device detected, checking for app...');
+    function startRedirect() {
+        // Only run on the production web URL to avoid issues in local dev or native app
+        const isProduction = window.location.hostname === 'answer.abelosky.com';
 
-        // Get room code from URL if present
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomCode = urlParams.get('c');
+        if (isMobileDevice() && !isInApp() && isProduction) {
+            console.log('Mobile web detected, checking for app...');
 
-        // Build deep link URL
-        let deepLinkUrl = 'answer://open';
-        if (roomCode) {
-            deepLinkUrl += '?c=' + roomCode.toUpperCase();
-        }
+            // Get room code from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomCode = urlParams.get('c');
 
-        // Try to open the app
-        const startTime = Date.now();
-        let hasFocused = false;
+            // Build deep link URL
+            let deepLinkUrl = 'answer://open';
+            if (roomCode) {
+                deepLinkUrl += '?c=' + roomCode.toUpperCase();
+            }
 
-        // Listen for visibility change (app opened successfully)
-        const onVisibilityChange = function () {
-            if (document.hidden) {
+            // Try to open the app
+            const startTime = Date.now();
+            let hasFocused = false;
+
+            // Listen for visibility change (app opened successfully)
+            const onVisibilityChange = function () {
+                if (document.hidden) {
+                    hasFocused = true;
+                }
+            };
+
+            const onBlur = function () {
                 hasFocused = true;
-            }
-        };
+            };
 
-        const onBlur = function () {
-            hasFocused = true;
-        };
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            window.addEventListener('blur', onBlur);
+            window.addEventListener('pagehide', onBlur);
 
-        document.addEventListener('visibilitychange', onVisibilityChange);
-        window.addEventListener('blur', onBlur);
-        window.addEventListener('pagehide', onBlur);
+            // Attempt to open the app
+            window.location.href = deepLinkUrl;
 
-        // Attempt to open the app
-        window.location.href = deepLinkUrl;
+            // If app didn't open after 2.5 seconds, assume it's not installed
+            setTimeout(function () {
+                document.removeEventListener('visibilitychange', onVisibilityChange);
+                window.removeEventListener('blur', onBlur);
+                window.removeEventListener('pagehide', onBlur);
 
-        // If app didn't open after 2 seconds, assume it's not installed
-        setTimeout(function () {
-            document.removeEventListener('visibilitychange', onVisibilityChange);
-            window.removeEventListener('blur', onBlur);
-            window.removeEventListener('pagehide', onBlur);
+                const elapsed = Date.now() - startTime;
 
-            const elapsed = Date.now() - startTime;
+                // If the page is still visible and focused, app probably isn't installed
+                if (!hasFocused && !document.hidden && elapsed < 3500) {
+                    console.log('App not detected, showing install banner');
+                    // Optionally show a banner suggesting to install the app
+                    showAppInstallBanner(roomCode);
+                }
+            }, 2500);
+        }
+    }
 
-            // If the page is still visible and focused, app probably isn't installed
-            if (!hasFocused && !document.hidden && elapsed < 3000) {
-                console.log('App not detected, staying on web version');
-                // Optionally show a banner suggesting to install the app
-                showAppInstallBanner(roomCode);
-            }
-        }, 2500);
+    // Delay execution to ensure it doesn't block the initial render
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(startRedirect, 1000));
+    } else {
+        setTimeout(startRedirect, 1000);
     }
 
     // Optional: Show a banner suggesting to install the app
@@ -89,7 +105,7 @@
             z-index: 10000;
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             font-family: 'Fredoka', sans-serif;
-            animation: slideDown 0.3s ease-out;
+            animation: appBannerSlideDown 0.3s ease-out;
         `;
 
         banner.innerHTML = `
@@ -101,12 +117,12 @@
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <a href="https://play.google.com/store/apps/details?id=com.abelosky.answer" 
+                    <a href="https://play.google.com/store/apps/details?id=com.abelosky.answer"
                        target="_blank"
                        style="background: white; color: #667eea; padding: 8px 16px; border-radius: 20px; text-decoration: none; font-weight: 600; font-size: 0.9rem;">
                         Install
                     </a>
-                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()"
                             style="background: transparent; border: 1px solid white; color: white; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 0.9rem;">
                         ✕
                     </button>
@@ -114,29 +130,27 @@
             </div>
         `;
 
-        // Add animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideDown {
-                from {
-                    transform: translateY(-100%);
-                    opacity: 0;
+        // Add animation to head only if banner is shown
+        if (!document.getElementById('app-banner-styles')) {
+            const style = document.createElement('style');
+            style.id = 'app-banner-styles';
+            style.textContent = `
+                @keyframes appBannerSlideDown {
+                    from { transform: translateY(-100%); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
                 }
-                to {
-                    transform: translateY(0);
-                    opacity: 1;
-                }
-            }
-        `;
-        document.head.appendChild(style);
+            `;
+            document.head.appendChild(style);
+        }
 
         document.body.appendChild(banner);
 
         // Auto-hide after 10 seconds
         setTimeout(() => {
             if (banner.parentElement) {
-                banner.style.animation = 'slideDown 0.3s ease-out reverse';
-                setTimeout(() => banner.remove(), 300);
+                banner.style.opacity = '0';
+                banner.style.transition = 'opacity 0.5s ease-out';
+                setTimeout(() => banner.remove(), 500);
             }
         }, 10000);
     }
