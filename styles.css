@@ -31,7 +31,33 @@ body {
     color: var(--text);
     overflow: hidden;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Safari/Chrome */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* IE/Edge */
 }
+
+/* Prevent image dragging */
+img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    pointer-events: none;
+    /* Also prevents clicks, be careful if images need clicks */
+}
+
+/* Re-enable pointer-events for specific images if needed (e.g. buttons/avatars that act as buttons) */
+.mode-card img,
+.avatar-option img,
+.current-avatar-container img,
+.friend-avatar {
+    pointer-events: auto;
+}
+
 
 /* Math Background */
 #math-background {
@@ -170,7 +196,8 @@ body {
     text-align: center;
     width: 100%;
     animation: fadeIn 1s ease-out;
-    overflow-y: auto;
+    overflow: hidden;
+    /* Prevent scroll on logo */
     padding: 30px 10px;
 }
 
@@ -4022,4 +4049,581 @@ select:focus {
 
 .log-warn {
     color: #feca57;
+}
+
+/* Download App Button */
+.btn-download-app {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-download-app:hover {
+    background: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+    color: white;
+}
+
+.btn-download-app i {
+    font-size: 1.2rem;
+}
+
+@media (max-width: 768px) {
+    .btn-download-app {
+        top: 10px;
+        left: 10px;
+        padding: 8px 16px;
+        font-size: 0.8rem;
+    }
+}
+
+
+/* =========================
+   PREMIUM SLIDERS
+   ========================= */
+.slider-premium {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #dfe6e9;
+    border-radius: 999px;
+    outline: none;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
+
+.slider-premium:hover {
+    background: #b2bec3;
+}
+
+.slider-premium::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.2);
+    transition: all 0.2s;
+}
+
+.slider-premium::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(108, 92, 231, 0.3);
+}
+
+.slider-premium::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.2);
+    transition: all 0.2s;
+}
+
+.slider-premium::-moz-range-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(108, 92, 231, 0.3);
+}
+
+.audio-settings-group i {
+    color: var(--primary);
+    margin-right: 8px;
+    width: 20px;
+    text-align: center;
+}
+
+
+
+/* Specific override for Avatar Modal Container */
+#avatar-modal-overlay .custom-modal {
+    max-width: 800px;
+    /* Much wider */
+    width: 95%;
+    padding: 20px;
+}
+
+#avatar-grid-modal {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 10px;
+    justify-items: center;
+}
+
+/* Custom Scrollbar for Avatar Grid */
+#avatar-grid-modal::-webkit-scrollbar {
+    width: 8px;
+}
+
+#avatar-grid-modal::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+#avatar-grid-modal::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+}
+
+#avatar-grid-modal::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+#avatar-grid-modal .avatar-option {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 4px solid transparent;
+    transition: all 0.2s;
+    background: white;
+    padding: 5px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+#avatar-grid-modal .avatar-option img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+#avatar-grid-modal .avatar-option:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+#avatar-grid-modal .avatar-option.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.2);
+    transform: scale(1.05);
+}
+
+.btn-save {
+    background: var(--secondary);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+.btn-save:hover {
+    background: var(--secondary-dark);
+}
+
+/* Mobile responsive for avatar grid */
+@media (max-width: 480px) {
+    #avatar-grid-modal {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 15px;
+    }
+
+    #avatar-grid-modal .avatar-option {
+        width: 120px;
+        height: 120px;
+    }
+}
+
+/* =========================================
+   SETTINGS MODAL - GAME STYLE
+========================================= */
+
+/* Settings Modal Container - Ensure it fits on screen */
+#settings-modal-overlay .modal-content {
+    max-width: 650px !important;
+    width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border: none;
+}
+
+#settings-modal-overlay .auth-body {
+    padding: 25px;
+    overflow-y: auto;
+    max-height: calc(90vh - 60px);
+}
+
+/* Custom scrollbar for settings */
+#settings-modal-overlay .auth-body::-webkit-scrollbar {
+    width: 10px;
+}
+
+#settings-modal-overlay .auth-body::-webkit-scrollbar-track {
+    background: rgba(108, 92, 231, 0.1);
+    border-radius: 10px;
+}
+
+#settings-modal-overlay .auth-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--primary), var(--secondary));
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+#settings-modal-overlay .auth-body::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, var(--primary-dark), var(--secondary-dark));
+}
+
+/* Settings Title - Fun & Playful */
+#settings-modal-overlay h3 {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 25px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    position: relative;
+    padding-bottom: 15px;
+}
+
+#settings-modal-overlay h3::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--secondary));
+    border-radius: 2px;
+}
+
+/* Setting Group - Card Style */
+.setting-group {
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    border: 3px solid transparent;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+}
+
+.setting-group:hover {
+    border-color: var(--primary);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(108, 92, 231, 0.2);
+}
+
+/* Setting Labels - More Spacing & Fun Icons */
+.setting-group label {
+    display: flex;
+    align-items: center;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.setting-group label i {
+    margin-right: 12px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+}
+
+.setting-group:hover label i {
+    transform: scale(1.2);
+    color: var(--secondary);
+}
+
+/* Input Styling - Premium Game Style */
+.setting-group input[type="text"],
+.setting-group select {
+    width: 100%;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 3px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+        linear-gradient(135deg, #e0e0e0, #f0f0f0) border-box;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    position: relative;
+}
+
+.setting-group input[type="text"]:hover,
+.setting-group select:hover {
+    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.15);
+    transform: translateY(-2px);
+}
+
+.setting-group input[type="text"]:focus,
+.setting-group select:focus {
+    border: 3px solid transparent;
+    background: linear-gradient(white, white) padding-box,
+        linear-gradient(135deg, var(--primary), var(--secondary)) border-box;
+    box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.2), 0 8px 20px rgba(108, 92, 231, 0.25);
+    transform: scale(1.02);
+}
+
+.setting-group input[type="text"]::placeholder {
+    color: #95a5a6;
+    font-style: normal;
+    font-weight: 500;
+}
+
+/* Select Arrow Styling - Arrow Completely Removed */
+.setting-group select {
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: none !important;
+    background-color: white !important;
+    padding-right: 18px;
+}
+
+
+
+
+
+/* Audio Settings Group - Spacing Fixed */
+.audio-settings-group {
+    margin: 60px 0 30px 0 !important;
+    padding: 25px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+    border-radius: 16px;
+    border: 3px solid rgba(108, 92, 231, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.audio-settings-group h4 {
+    margin: 20px 0 25px 0;
+    color: var(--primary);
+    font-size: 1.3rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.audio-settings-group h4::before {
+    content: '\f001';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 1.5rem;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+/* Danger Zone - Warning Style */
+.danger-zone {
+    background: linear-gradient(135deg, #ff6b6b20, #ee5a6f20);
+    padding: 25px;
+    border-radius: 16px;
+    border: 3px solid #ff6b6b;
+    margin-top: 30px;
+    position: relative;
+    overflow: hidden;
+}
+
+.danger-zone::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 107, 0.1), transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+.danger-zone h4 {
+    color: var(--danger);
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin: 0 0 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.danger-zone h4::before {
+    content: '\f071';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 1.5rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Save Button - Epic Game Style */
+#btn-save-settings {
+    margin-top: 30px;
+    padding: 18px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    box-shadow: 0 8px 0 #5849be, 0 12px 24px rgba(108, 92, 231, 0.4);
+    transition: all 0.2s ease;
+}
+
+#btn-save-settings:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 0 #5849be, 0 16px 32px rgba(108, 92, 231, 0.5);
+}
+
+#btn-save-settings:active {
+    transform: translateY(4px);
+    box-shadow: 0 4px 0 #5849be, 0 8px 16px rgba(108, 92, 231, 0.3);
+}
+
+
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    #settings-modal-overlay .modal-content {
+        max-width: 95% !important;
+        max-height: 95vh;
+        margin: 10px;
+    }
+
+    #settings-modal-overlay .auth-body {
+        padding: 15px;
+        max-height: calc(95vh - 50px);
+    }
+
+    #settings-modal-overlay h3 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+    }
+
+    .setting-group {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .setting-group label {
+        font-size: 0.9rem;
+    }
+
+    .setting-group label i {
+        width: 28px;
+        height: 28px;
+        font-size: 0.9rem;
+    }
+
+    .audio-settings-group {
+        margin-top: 40px !important;
+        padding: 15px;
+    }
+
+    .audio-settings-group h4 {
+        font-size: 1.1rem;
+    }
+
+    #btn-save-settings {
+        font-size: 1rem;
+        padding: 15px;
+    }
+}
+
+/* Inactivity Warning Banner */
+.inactivity-warning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #3b82f6;
+    /* Blue */
+    color: white;
+    padding: 12px;
+    text-align: center;
+    z-index: 9999;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-100%);
+    transition: transform 0.3s ease-in-out;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.inactivity-warning.active {
+    transform: translateY(0);
 }

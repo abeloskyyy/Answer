@@ -119,6 +119,60 @@ const roomTimers = new Map(); // Store room game timers: roomId -> timeout/inter
 const disconnectTimeouts = new Map(); // Store user disconnect timeouts: socketId -> timeout
 const connectedUsers = new Map(); // Maps firebase UID -> socket.id for direct messaging
 
+const ROOM_IDLE_TIMEOUT = 6 * 60 * 1000; // 6 minutes
+const ROOM_WARNING_TIMEOUT = 5 * 60 * 1000; // 5 minutes (Warning)
+
+const roomIdleTimers = new Map(); // roomId -> timeout (Close)
+const roomWarningTimers = new Map(); // roomId -> timeout (Warning)
+
+function startIdleTimer(roomId) {
+    // Clear existing if any
+    clearIdleTimer(roomId);
+
+    console.log(`[DEBUG] Starting idle timers for room ${roomId}`);
+
+    // Warning Timer
+    const warningTimer = setTimeout(() => {
+        console.log(`[DEBUG] Emitting idle warning for room ${roomId}`);
+        io.to(roomId).emit('room_idle_warning', {
+            timeLeft: ROOM_IDLE_TIMEOUT - ROOM_WARNING_TIMEOUT
+        });
+    }, ROOM_WARNING_TIMEOUT);
+    roomWarningTimers.set(roomId, warningTimer);
+
+    // Close Timer
+    const closeTimer = setTimeout(() => closeIdleRoom(roomId), ROOM_IDLE_TIMEOUT);
+    roomIdleTimers.set(roomId, closeTimer);
+}
+
+function clearIdleTimer(roomId) {
+    if (roomIdleTimers.has(roomId)) {
+        clearTimeout(roomIdleTimers.get(roomId));
+        roomIdleTimers.delete(roomId);
+    }
+    if (roomWarningTimers.has(roomId)) {
+        clearTimeout(roomWarningTimers.get(roomId));
+        roomWarningTimers.delete(roomId);
+    }
+}
+
+function closeIdleRoom(roomId) {
+    console.log(`[DEBUG] Attempting to close idle room: ${roomId}`);
+    const room = rooms[roomId];
+    if (room) {
+        console.log(`[DEBUG] Closing room ${roomId} due to inactivity.`);
+        io.to(roomId).emit('error', 'Room closed due to inactivity.');
+        io.to(roomId).emit('room_closed', 'inactivity');
+
+        // Cleanup
+        delete rooms[roomId];
+        clearIdleTimer(roomId);
+        console.log(`[DEBUG] Room ${roomId} deleted.`);
+    } else {
+        console.log(`[DEBUG] Room ${roomId} not found during idle close.`);
+    }
+}
+
 
 // API to list background music files
 app.get('/api/music', (req, res) => {
@@ -190,6 +244,9 @@ io.on('connection', (socket) => {
         socket.emit('host_status', true);
         io.to(roomId).emit('update_users', rooms[roomId].users);
         console.log(`Room created: ${roomId} by ${username} (${socket.id})`);
+
+        // Start Idle Timer
+        startIdleTimer(roomId);
     });
 
     // Join Room
@@ -325,12 +382,59 @@ io.on('connection', (socket) => {
         if (!room) return;
 
         room.currentRound++;
+        console.log(`[DEBUG] startRound called for room ${roomId}. Current round: ${room.currentRound}/${room.settings.rounds}`);
         if (room.currentRound > room.settings.rounds) {
             // Game Over
             room.gameState = 'finished';
             const sortedUsers = [...room.users].sort((a, b) => b.score - a.score);
             io.to(roomId).emit('game_over', sortedUsers);
             console.log(`Game ended in room ${roomId}. Winner: ${sortedUsers[0].name} (${sortedUsers[0].score})`);
+
+            // UPDATE STATS IN FIRESTORE
+            console.log(`[STATS] Checking DB connection for room ${roomId}. DB exists: ${!!db}`);
+            if (db) {
+                console.log(`[STATS] Attempting to update stats for room ${roomId}`);
+                const batch = db.batch();
+                let hasUpdates = false;
+
+                sortedUsers.forEach((user, index) => {
+                    // Debug Log
+                    console.log(`[STATS] Checking user: ${user.name} (UUID: ${user.uuid})`);
+
+                    // Only update stats for registered users (who have a real UID, not guest-socketId)
+                    if (user.uuid && !user.uuid.startsWith('guest-')) {
+                        const userRef = db.collection('users').doc(user.uuid);
+
+                        // Prepare updates
+                        const updates = {
+                            'stats.gamesPlayed': admin.firestore.FieldValue.increment(1),
+                            'stats.totalScore': admin.firestore.FieldValue.increment(user.score || 0)
+                        };
+
+                        // Winner gets a win increment
+                        if (index === 0) {
+                            updates['stats.wins'] = admin.firestore.FieldValue.increment(1);
+                        }
+
+                        batch.set(userRef, updates, { merge: true });
+                        hasUpdates = true;
+                        console.log(`[STATS] Prepared update for ${user.name}`);
+                    } else {
+                        console.log(`[STATS] Skipped ${user.name} (Guest or Invalid UUID)`);
+                    }
+                });
+
+                if (hasUpdates) {
+                    batch.commit()
+                        .then(() => console.log(`[STATS] Stats successfully updated for room ${roomId}`))
+                        .catch(err => console.error(`[STATS] Error updating stats for room ${roomId}:`, err));
+                } else {
+                    console.log(`[STATS] No valid users to update stats for in room ${roomId}`);
+                }
+            } else {
+                console.warn('[STATS] DB instance not available, skipping stats update.');
+            }
+
             return;
         }
 
@@ -385,7 +489,12 @@ io.on('connection', (socket) => {
             // Delay slightly then start first round
             // Delay slightly then start first round
             setTimeout(() => startRound(roomId), 3200);
+            setTimeout(() => startRound(roomId), 3200);
             console.log(`Game started request by host ${room.users[0].name} (${socket.id}) in room ${roomId}`);
+
+            // Clear Idle Timer
+            console.log(`[DEBUG] Clearing idle timer for room ${roomId} (Game Started)`);
+            clearIdleTimer(roomId);
         }
     });
 
@@ -514,6 +623,10 @@ io.on('connection', (socket) => {
                 // If host leaves, assign new host or delete room
                 if (room.users.length === 0) {
                     delete rooms[roomId];
+
+                    // Clear Idle Timer
+                    clearIdleTimer(roomId);
+
                     console.log(`Room deleted: ${roomId}`);
                 } else if (room.host === socket.id) {
                     room.host = room.users[0].id; // Assign new host
@@ -571,6 +684,10 @@ io.on('connection', (socket) => {
                             if (room.users.length === 0) {
                                 delete rooms[roomId];
                                 roomTimers.delete(roomId);
+
+                                // Clear Idle Timer
+                                clearIdleTimer(roomId);
+
                                 console.log(`Room deleted: ${roomId}`);
                             } else if (room.host === socket.id) {
                                 room.host = room.users[0].id; // Assign new host

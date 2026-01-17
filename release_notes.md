@@ -1,0 +1,11 @@
+- Corrected "user-select" to improve the user experience.
+- Added button to download the Android application (only for web version).
+- Now, the music doesn't stop at exiting a room.
+- Improved the avatar selector.
+- Fixed the logo container for deny scrolling on small screens.
+- Added volume adjustements for background music and sound effects.
+- Added translation system for all the game.
+- Improved the settings menu styles.
+- Added inactivity timer to close the room if players are inactive.
+- Added statistics functionality.
+

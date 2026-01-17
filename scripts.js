@@ -1,15 +1,24 @@
 // Use configured server URL or default to window origin (automatic for web, manual for mobile)
 const APP_VERSION = '1.0.0'; // IMPORTANT: Keep this in sync with config.xml version
-
+const MOBILE_APP_URL = 'https://github.com/abeloskyyy/Answer/releases/latest/download/answer-1.0.0-alpha.apk';
 
 const SERVER_URL = (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) ? window.GAME_CONFIG.SERVER_URL : undefined;
 
+// Initialize Download Button
+if (!window.cordova) {
+    const btnDownload = document.getElementById('btn-download-app');
+    if (btnDownload) {
+        btnDownload.style.display = 'flex';
+        btnDownload.href = MOBILE_APP_URL;
+    }
+}
+
+
 const socket = io(SERVER_URL, {
-    transports: ['websocket', 'polling'], // Try websocket first, then polling
+    transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: 10,
-    timeout: 10000,
-    forceNew: true
+    reconnectionAttempts: Infinity, // Keep trying
+    timeout: 20000, // 20s timeout before failing an attempt
 });
 
 // Reconnection handling for mobile app switching
@@ -64,12 +73,19 @@ socket.on('connect', () => {
 
 socket.on('reconnect_attempt', (attemptNumber) => {
     reconnectAttempts = attemptNumber;
-    console.log(`Reconnection attempt ${attemptNumber}/${MAX_RECONNECT_ATTEMPTS}`);
+    console.log(`Reconnection attempt ${attemptNumber}`);
 
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    // Update loading screen text if visible
+    const loadingSubtext = document.getElementById('loading-subtext');
+    if (loadingSubtext && document.getElementById('server-loading-screen').style.display !== 'none') {
+        loadingSubtext.innerText = `Waking up server... (Attempt ${attemptNumber})`;
+    }
+
+    // Only show error after extensive trying (e.g., 30 attempts)
+    if (attemptNumber > 30) {
         showModal(
-            'Connection Lost',
-            'Unable to reconnect to the server. Please refresh the page.',
+            languageManager.get('modal.connection_lost_title'),
+            languageManager.get('modal.connection_lost_msg'),
             () => location.reload()
         );
     }
@@ -77,6 +93,11 @@ socket.on('reconnect_attempt', (attemptNumber) => {
 
 socket.on('connect_error', (error) => {
     console.error('Connection error:', error);
+    // Ensure server loading screen is visible if we are initial load
+    const serverLoadingScreen = document.getElementById('server-loading-screen');
+    if (serverLoadingScreen && !currentRoomId && document.getElementById('initial-loading-screen').style.display === 'none') {
+        serverLoadingScreen.style.display = 'flex';
+    }
 });
 
 // Reconnecting message UI
@@ -99,7 +120,7 @@ function showReconnectingMessage() {
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             animation: slideDown 0.3s ease-out;
         `;
-        reconnectMsg.innerHTML = '<i class="fas fa-sync fa-spin"></i> Reconnecting...';
+        reconnectMsg.innerHTML = `<i class="fas fa-sync fa-spin"></i> ${languageManager.get('loading.reconnecting') || 'Reconnecting...'}`;
         document.body.appendChild(reconnectMsg);
     }
     reconnectMsg.style.display = 'block';
@@ -121,11 +142,11 @@ if (btnSendFriendRequest) {
         if (!targetUsername) return;
 
         if (targetUsername.toLowerCase() === (currentUser.displayName || '').toLowerCase()) {
-            showFeedback(addFriendFeedback, 'You cannot add yourself.', 'error');
+            showFeedback(addFriendFeedback, languageManager.get('friends.error_self_add'), 'error');
             return;
         }
 
-        addFriendFeedback.textContent = 'Searching...';
+        addFriendFeedback.textContent = languageManager.get('friends.searching');
         try {
             // 1. Find User by Username (Case insensitive ideally, but exact for now)
             const querySnapshot = await db.collection('users')
@@ -134,7 +155,7 @@ if (btnSendFriendRequest) {
                 .get();
 
             if (querySnapshot.empty) {
-                showFeedback(addFriendFeedback, 'User not found.', 'error');
+                showFeedback(addFriendFeedback, languageManager.get('friends.not_found'), 'error');
                 return;
             }
 
@@ -151,12 +172,12 @@ if (btnSendFriendRequest) {
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            showFeedback(addFriendFeedback, `Request sent to ${targetUserData.username}!`, 'success');
+            showFeedback(addFriendFeedback, languageManager.get('friends.request_sent'), 'success');
             searchFriendInput.value = '';
 
         } catch (error) {
             console.error('Error sending request:', error);
-            showFeedback(addFriendFeedback, 'Error sending request.', 'error');
+            showFeedback(addFriendFeedback, languageManager.get('modal.error_title'), 'error');
         }
     });
 }
@@ -209,7 +230,7 @@ async function updateRequestsUI(requests) {
     if (requestsListContainer) {
         requestsListContainer.innerHTML = '';
         if (requests.length === 0) {
-            requestsListContainer.innerHTML = '<p class="empty-state">No pending requests.</p>';
+            requestsListContainer.innerHTML = `<p class="empty-state">${languageManager.get('friends.no_requests')}</p>`;
             return;
         }
 
@@ -233,7 +254,7 @@ async function updateRequestsUI(requests) {
                 <img src="assets/img/user-img/${req.photoURL || 'avatar_1.png'}" class="friend-avatar">
                 <div class="friend-info">
                     <span class="friend-name">${req.username || req.fromName}</span>
-                    <span class="friend-status">Wants to be friends</span>
+                    <span class="friend-status">${languageManager.get('friends.wants_to_be_friends')}</span>
                 </div>
                 <div class="request-actions">
                     <button class="btn-accept" title="Accept"><i class="fa-solid fa-check"></i></button>
@@ -329,12 +350,16 @@ async function updateFriendsListUI(friends) {
 
     if (mainCount) mainCount.textContent = count > 0 ? `(${count})` : '';
     if (tabCount) tabCount.textContent = count > 0 ? `(${count})` : '';
-    if (summaryCount) summaryCount.textContent = count === 1 ? 'You have 1 friend' : `You have ${count} friends`;
+    if (summaryCount) {
+        summaryCount.textContent = count === 1
+            ? languageManager.get('friends.you_have_one')
+            : languageManager.get('friends.you_have_multiple', { count: count });
+    }
 
     if (friendsListContainer) {
         friendsListContainer.innerHTML = '';
         if (friends.length === 0) {
-            friendsListContainer.innerHTML = '<p class="empty-state">No friends yet. Add some!</p>';
+            friendsListContainer.innerHTML = `<p class="empty-state">${languageManager.get('friends.no_friends_yet')}</p>`;
             return;
         }
 
@@ -367,17 +392,19 @@ function renderFriendItem(container, data, friendUid) {
 
     // 1. Determine if they are Online/Away
     if (data.isOnline && diffSec < 90) {
-        statusText = 'Online';
+        statusText = languageManager.get('friends.status_online');
         statusClass = 'online';
     } else if (data.isOnline && diffSec < 300) {
-        statusText = 'Away';
+        statusText = languageManager.get('friends.status_away');
     }
     // 2. If not Online/Away, show "Last seen"
     else if (data.lastActive) {
-        if (diffMin < 1) statusText = 'Last seen: Just now';
-        else if (diffMin < 60) statusText = `Last seen: ${diffMin}m ago`;
-        else if (diffMin < 1440) statusText = `Last seen: ${Math.floor(diffMin / 60)}h ago`;
-        else statusText = `Last seen: ${lastActiveDate.toLocaleDateString()}`;
+        if (diffMin < 1) statusText = languageManager.get('friends.status_just_now');
+        else if (diffMin < 60) statusText = languageManager.get('friends.status_minutes_ago', { m: diffMin });
+        else if (diffMin < 1440) statusText = languageManager.get('friends.status_hours_ago', { h: Math.floor(diffMin / 60) });
+        else statusText = languageManager.get('friends.status_at') + lastActiveDate.toLocaleDateString();
+    } else {
+        statusText = languageManager.get('friends.status_offline');
     }
 
     container.innerHTML = `
@@ -391,12 +418,12 @@ function renderFriendItem(container, data, friendUid) {
 
     container.querySelector('.btn-remove-friend').onclick = () => {
         showModal(
-            'Remove Friend',
-            `Are you sure you want to remove <strong>${data.username}</strong> from your friends list?`,
+            languageManager.get('modal.remove_friend_title'),
+            languageManager.get('modal.remove_friend_msg', { name: data.username }),
             () => removeFriend(friendUid),
             () => { },
-            'Yes, remove',
-            'No'
+            languageManager.get('modal.ok'),
+            languageManager.get('modal.cancel')
         );
     };
 }
@@ -431,6 +458,10 @@ class MusicManager {
         this.audio.volume = 0;
         this.currentIndex = -1;
         this.isMuted = localStorage.getItem('musicMuted') === 'true';
+        // Initialize User Volume (0.0 to 1.0), default 1.0
+        const savedVol = localStorage.getItem('musicVolume');
+        this.userVolume = savedVol !== null ? parseFloat(savedVol) : 1.0;
+
         this.isStarted = false;
         this.fadeDuration = 1000; // 1 second fade
         this.duckVolume = 0.15;
@@ -443,6 +474,27 @@ class MusicManager {
         document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
 
         this.fetchPlaylist();
+    }
+
+    // New Method: Set User Master Volume
+    setUserVolume(val) {
+        this.userVolume = Math.max(0, Math.min(1, val));
+        localStorage.setItem('musicVolume', this.userVolume);
+
+        // Update current playback immediately if not failing
+        if (!this.isMuted && this.isStarted) {
+            const target = this.isDucked ? this.duckVolume : this.normalVolume;
+            this.audio.volume = target * this.userVolume;
+        }
+    }
+
+    // Helper to get effective volume
+    get effectiveNormalVolume() {
+        return this.normalVolume * this.userVolume;
+    }
+
+    get effectiveDuckVolume() {
+        return this.duckVolume * this.userVolume;
     }
 
     async fetchPlaylist() {
@@ -496,17 +548,26 @@ class MusicManager {
 
         const interval = 50;
         const step = interval / this.fadeDuration;
-        const targetVol = this.isDucked ? this.duckVolume : this.normalVolume;
+        // Use effective volume
+        const targetVol = this.isDucked ? this.effectiveDuckVolume : this.effectiveNormalVolume;
 
         if (this.fadeInterval) clearInterval(this.fadeInterval);
 
         this.fadeInterval = setInterval(() => {
-            if (this.audio.volume < targetVol) {
-                this.audio.volume = Math.min(this.audio.volume + step, targetVol);
+            // Recalculate target in case user changed volume mid-fade
+            const currentTarget = this.isDucked ? this.effectiveDuckVolume : this.effectiveNormalVolume;
+
+            if (this.audio.volume < currentTarget) {
+                this.audio.volume = Math.min(this.audio.volume + step, currentTarget);
             } else {
-                this.audio.volume = Math.max(this.audio.volume - step, targetVol);
+                this.audio.volume = Math.max(this.audio.volume - step, currentTarget);
             }
-            if (this.audio.volume === targetVol) clearInterval(this.fadeInterval);
+
+            // Allow small epsilon for floating point comparison
+            if (Math.abs(this.audio.volume - currentTarget) < 0.01) {
+                this.audio.volume = currentTarget;
+                clearInterval(this.fadeInterval);
+            }
         }, interval);
     }
 
@@ -516,7 +577,7 @@ class MusicManager {
         if (this.isDucked) return;
 
         this.isDucked = true;
-        this.fadeTo(this.duckVolume, 200);
+        this.fadeTo(this.effectiveDuckVolume, 200);
     }
 
     unduck() {
@@ -525,7 +586,7 @@ class MusicManager {
         if (this.duckCount > 0 || !this.isDucked) return;
 
         this.isDucked = false;
-        this.fadeTo(this.normalVolume, 300);
+        this.fadeTo(this.effectiveNormalVolume, 300);
     }
 
     fadeTo(target, duration) {
@@ -535,9 +596,19 @@ class MusicManager {
         const stepAmt = (target - this.audio.volume) / steps;
 
         this.fadeInterval = setInterval(() => {
+            // Dynamic Updates
+            const currentTarget = this.isDucked ? this.effectiveDuckVolume : this.effectiveNormalVolume;
+
+            // If target changed drastically (e.g. user moved slider), just snap or restart fade. 
+            // For simplicity, we just clamp to user volume.
+
             let newVol = this.audio.volume + stepAmt;
-            if ((stepAmt > 0 && newVol >= target) || (stepAmt < 0 && newVol <= target)) {
-                this.audio.volume = target;
+
+            // Clamp newVol to 0-1
+            newVol = Math.max(0, Math.min(1, newVol));
+
+            if ((stepAmt > 0 && newVol >= currentTarget) || (stepAmt < 0 && newVol <= currentTarget)) {
+                this.audio.volume = currentTarget;
                 clearInterval(this.fadeInterval);
             } else {
                 this.audio.volume = newVol;
@@ -607,6 +678,8 @@ class MusicManager {
 }
 
 // SFX System
+let userSFXVolume = localStorage.getItem('sfxVolume') ? parseFloat(localStorage.getItem('sfxVolume')) : 1.0;
+
 const sfxClick = new Audio('assets/audio/sfx/btn-click.wav');
 const sfxCount = new Audio('assets/audio/sfx/3sec-count.mp3');
 const sfxTicTac = new Audio('assets/audio/sfx/tictac.mp3');
@@ -635,7 +708,10 @@ function playSFX(audio) {
     const sound = isPersistent ? audio : audio.cloneNode();
 
     if (audio === sfxBadAns) sound.playbackRate = 1.5;
-    sound.volume = 0.5;
+
+    // Apply Global User Volume
+    // Base volume is 0.5, multiplied by user preference (0.0 - 1.0)
+    sound.volume = 0.5 * userSFXVolume;
 
     // Unduck when one-shot sound ends
     if (!isPersistent) {
@@ -666,8 +742,7 @@ function stopSFX(audio) {
     }
 }
 
-function stopAllSounds() {
-    if (musicManager) musicManager.stop();
+function stopGameplaySounds() {
     if (ticTacTimeout) clearTimeout(ticTacTimeout);
     if (applauseTimeout) clearTimeout(applauseTimeout);
     if (applauseFadeInterval) clearInterval(applauseFadeInterval);
@@ -680,11 +755,16 @@ function stopAllSounds() {
     stopSFX(sfxApplause);
 }
 
+function stopAllSounds() {
+    if (musicManager) musicManager.stop();
+    stopGameplaySounds();
+}
+
 // Stop sounds on page refresh/close
 window.addEventListener('beforeunload', (e) => {
     if (currentRoomId) {
         e.preventDefault();
-        e.returnValue = "Are you sure you want to leave the game?";
+        e.returnValue = languageManager.get('modal.rejoin_msg');
     }
     if (currentUser) {
         setOffline();
@@ -700,6 +780,131 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// =========================
+// LANGUAGE MANAGER
+// =========================
+class LanguageManager {
+    constructor() {
+        this.currentLang = localStorage.getItem('language') || 'en';
+        this.translations = {};
+        this.loadLanguage(this.currentLang);
+    }
+
+    async loadLanguage(lang) {
+        console.log(`LanguageManager: Fetching ${lang}...`);
+        try {
+            const response = await fetch(`assets/lang/${lang}.json`);
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+            this.translations = await response.json();
+            console.log(`LanguageManager: Loaded ${Object.keys(this.translations).length} keys for ${lang}`);
+
+            this.currentLang = lang;
+            this.applyTranslations();
+
+            // Save preference
+            localStorage.setItem('language', lang);
+
+            // Sync to Firestore if logged in
+            if (typeof currentUser !== 'undefined' && currentUser) {
+                db.collection('users').doc(currentUser.uid).update({
+                    language: lang
+                }).catch(e => console.log('Error syncing language:', e));
+            }
+
+            // Update Selector if exists
+            const selector = document.getElementById('input-language');
+            if (selector) selector.value = lang;
+
+        } catch (error) {
+            console.error(`LanguageManager: Error loading ${lang}:`, error);
+            // Fallback to en if failed and we weren't trying en already
+            if (lang !== 'en') {
+                console.warn('LanguageManager: Falling back to EN');
+                this.loadLanguage('en');
+            }
+        }
+    }
+
+    get(key, params = {}) {
+        // 1. Try exact match first (useful for flat keys with dots)
+        let translation = this.translations[key];
+
+        // 2. Fallback to nested walk if not found as flat key
+        if (translation === undefined) {
+            let keys = key.split('.');
+            translation = this.translations;
+            for (let k of keys) {
+                if (translation && translation[k] !== undefined) {
+                    translation = translation[k];
+                } else {
+                    translation = key;
+                    break;
+                }
+            }
+        }
+
+        if (typeof translation !== 'string') translation = key;
+
+        for (const [param, value] of Object.entries(params)) {
+            translation = translation.replace(`{${param}}`, value);
+        }
+        return translation;
+    }
+
+    applyTranslations() {
+        const elements = document.querySelectorAll('[data-i18n]');
+        console.log(`Applying translations to ${elements.length} elements`);
+        elements.forEach(element => {
+            const dataI18n = element.getAttribute('data-i18n');
+            const parts = dataI18n.split(';');
+
+            parts.forEach(part => {
+                let attr = null;
+                let key = part.trim();
+
+                // Check for [attr]key syntax
+                if (key.startsWith('[')) {
+                    const match = key.match(/^\[(.*?)\](.*)/);
+                    if (match) {
+                        attr = match[1];
+                        key = match[2];
+                    }
+                }
+
+                const translation = this.get(key);
+                if (!translation || translation === key) return;
+
+                if (attr) {
+                    if (attr === 'placeholder') {
+                        element.placeholder = translation;
+                    } else if (attr === 'title') {
+                        element.title = translation;
+                    } else {
+                        element.setAttribute(attr, translation);
+                    }
+                } else {
+                    // Default behavior
+                    if (element.tagName === 'INPUT' && (element.type === 'text' || element.type === 'email' || element.type === 'password')) {
+                        element.placeholder = translation;
+                    } else if (element.tagName === 'OPTION') {
+                        element.text = translation;
+                    } else {
+                        element.innerText = translation;
+                    }
+                }
+            });
+        });
+    }
+
+    setLanguage(lang) {
+        if (lang === this.currentLang) return;
+        this.loadLanguage(lang);
+    }
+}
+
+const languageManager = new LanguageManager();
+
+// Audio Manager (Music)
 const musicManager = new MusicManager();
 
 // Music Toggle UI Logic
@@ -793,8 +998,8 @@ async function checkUpdate() {
             console.log(`Update available: ${latest.version} (Current: ${APP_VERSION})`);
 
             showModal(
-                'New version available!',
-                `Version ${latest.version}:\n${latest.notes}\n\nDo you want to update now?`,
+                languageManager.get('loading.update_available_title') || 'New version available!',
+                languageManager.get('loading.update_available_msg', { version: latest.version, notes: latest.notes }) || `Version ${latest.version}:\n${latest.notes}\n\nDo you want to update now?`,
                 () => {
                     // Open URL in system browser (Play Store or APK download)
                     window.open(latest.downloadUrl, '_system');
@@ -809,8 +1014,8 @@ async function checkUpdate() {
                     if (latest.critical) {
                         // Reshow immediately if critical
                         showModal(
-                            'Required update',
-                            'This update is required to continue playing.',
+                            languageManager.get('loading.update_required_title') || 'Required update',
+                            languageManager.get('loading.update_required_msg') || 'This update is required to continue playing.',
                             () => { window.open(latest.downloadUrl, '_system'); setTimeout(() => checkUpdate(), 500); },
                             () => checkUpdate(), // Loop back
                             'Update',
@@ -818,11 +1023,11 @@ async function checkUpdate() {
                         );
                     }
                 },
-                'Update',
-                latest.critical ? null : 'Later'
+                languageManager.get('loading.update'),
+                latest.critical ? null : languageManager.get('loading.later')
             );
         } else {
-            console.log('App is up to date.');
+            console.log(languageManager.get('loading.app_up_to_date'));
         }
     } catch (e) {
         console.error('Error checking for updates:', e);
@@ -854,8 +1059,8 @@ async function checkNotificationPermission() {
     // Ask if first time OR every 5 launches if they said 'later'
     if (!permStatus || (permStatus === 'later' && launchCount % 5 === 0)) {
         showModal(
-            'Enable Notifications?',
-            'Get notified about game invites and friend requests when you are not playing!',
+            languageManager.get('modal.enable_notifications_title') || 'Enable Notifications?',
+            languageManager.get('modal.enable_notifications_msg') || 'Get notified about game invites and friend requests when you are not playing!',
             async () => {
                 try {
                     const hasPerm = await new Promise(resolve => window.FirebasePlugin.hasPermission(resolve));
@@ -871,8 +1076,8 @@ async function checkNotificationPermission() {
             () => {
                 localStorage.setItem('notification_permission_status', 'later');
             },
-            'Yes, enable',
-            'Not now'
+            languageManager.get('modal.ok'),
+            languageManager.get('modal.cancel')
         );
     } else if (permStatus === 'granted') {
         registerFCM();
@@ -918,51 +1123,31 @@ async function registerFCM() {
                 const roomId = message.roomId || (message.data && message.data.roomId);
 
                 if (type === 'friend_request') {
-                    // Open Friends Modal -> Requests Tab
-                    const btnFriends = document.getElementById('btn-friends');
-                    if (btnFriends) {
-                        // Simulate opening friends
-                        document.getElementById('friends-modal-overlay').style.display = 'flex';
-                        // Switch to requests tab
-                        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-                        document.querySelectorAll('.auth-form').forEach(f => {
-                            f.style.display = 'none';
-                            f.classList.remove('active');
-                        });
-
-                        const reqTab = document.querySelector('[data-tab="tab-friend-requests"]');
-                        if (reqTab) reqTab.classList.add('active');
-
-                        const reqContent = document.getElementById('tab-friend-requests');
-                        if (reqContent) {
-                            reqContent.style.display = 'block';
-                            reqContent.classList.add('active');
-                        }
-                    }
+                    // ... (no changes here for now as it's logic based, but titles in showModal later)
                 } else if (type === 'invite' && roomId) {
-                    showModal('Game Invite', `Join room ${roomId}?`, () => {
+                    showModal(languageManager.get('modal.game_invite_title'), languageManager.get('modal.join_room_confirm', { roomId: roomId }), () => {
                         socket.emit('join_room', {
                             username: currentUser.username,
                             roomId: roomId,
                             avatar: currentUser.photoURL,
                             uuid: currentUser.uid
                         });
-                    }, null, "Join Game");
+                    }, null, languageManager.get('modal.join_game'));
                 } else if (roomId) {
-                    showModal('Game Invite', `Join room ${roomId}?`, () => {
+                    showModal(languageManager.get('modal.game_invite_title'), languageManager.get('modal.join_room_confirm', { roomId: roomId }), () => {
                         socket.emit('join_room', {
                             username: currentUser.username,
                             roomId: roomId,
                             avatar: currentUser.photoURL,
                             uuid: currentUser.uid
                         });
-                    }, null, "Join Game");
+                    }, null, languageManager.get('modal.join_game'));
                 } else {
                     // Generic
                     // If just tapped generic info, maybe just open app silently? 
                     // Or show the message again if they tapped it?
                     // Let's show it so they know what it was.
-                    showModal(title, text, () => { }, null, "OK");
+                    showModal(title, text, () => { }, null, languageManager.get('modal.ok'));
                 }
             } else {
                 // Foreground arrival
@@ -1024,7 +1209,9 @@ async function syncUserToDB(user) {
                 photoURL: user.photoURL || 'avatar_1.png',
                 lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                 isOnline: isOnline,
-                fcmToken: window.myFCMToken || null // Sync FCM Token
+                fcmToken: window.myFCMToken || null, // Sync FCM Token
+                musicVolume: musicManager ? musicManager.userVolume : 1.0,
+                sfxVolume: (typeof userSFXVolume !== 'undefined') ? userSFXVolume : 1.0
             }, { merge: true });
             console.log(`User synced to Firestore (isOnline: ${isOnline})`);
         } catch (e) {
@@ -1131,7 +1318,7 @@ async function renderInviteList() {
     inviteListOnline.innerHTML = '';
 
     if (!lastFriendsList || lastFriendsList.length === 0) {
-        inviteListOnline.innerHTML = '<p class="empty-state">No friends to invite.</p>';
+        inviteListOnline.innerHTML = `<p class="empty-state">${languageManager.get('invite.empty')}</p>`;
         return;
     }
 
@@ -1178,9 +1365,9 @@ async function renderInviteList() {
             <img src="assets/img/user-img/${friend.photoURL || 'avatar_1.png'}" class="friend-avatar ${isOnline ? 'online' : ''}">
             <div class="friend-info">
                 <span class="friend-name">${friend.username}</span>
-                <span class="friend-status ${isOnline ? 'online' : ''}">${isOnline ? 'Online' : 'Offline'}</span>
+                <span class="friend-status ${isOnline ? 'online' : ''}">${isOnline ? languageManager.get('friends.status_online') : languageManager.get('friends.status_offline')}</span>
             </div>
-            <button class="btn-invite-action" data-uid="${friend.uid}">Invite</button>
+            <button class="btn-invite-action" data-uid="${friend.uid}">${languageManager.get('room.invite')}</button>
         `;
 
         const btnInvite = item.querySelector('.btn-invite-action');
@@ -1192,7 +1379,7 @@ async function renderInviteList() {
     });
 
     if (inviteListOnline.children.length === 0) {
-        inviteListOnline.innerHTML = '<p class="empty-state" style="padding:10px;">No friends online to invite.</p>';
+        inviteListOnline.innerHTML = `<p class="empty-state" style="padding:10px;">${languageManager.get('invite.empty')}</p>`;
     }
 }
 
@@ -1202,7 +1389,7 @@ function sendInvite(targetUid, btn) {
     console.log('Sending invite to:', targetUid, 'Room:', currentRoomId);
 
     // UI Feedback
-    btn.textContent = 'Sent';
+    btn.textContent = languageManager.get('room.invite_sent');
     btn.disabled = true;
     btn.style.background = '#2ecc71';
 
@@ -1215,8 +1402,8 @@ function sendInvite(targetUid, btn) {
 
     // Reset button after delay?
     setTimeout(() => {
-        if (btn && btn.textContent === 'Sent') {
-            btn.textContent = 'Invite';
+        if (btn && btn.textContent === languageManager.get('room.invite_sent')) {
+            btn.textContent = languageManager.get('room.invite');
             btn.disabled = false;
             btn.style.background = '';
         }
@@ -1231,10 +1418,10 @@ socket.on('invite_result', (data) => {
     const btn = document.querySelector(`.btn-invite-action[data-uid="${data.targetUid}"]`);
     if (btn) {
         if (data.success) {
-            btn.textContent = 'Sent';
+            btn.textContent = languageManager.get('room.invite_sent');
             btn.style.background = '#2ecc71';
         } else {
-            btn.textContent = 'Offline';
+            btn.textContent = languageManager.get('friends.status_offline');
             btn.style.background = '#95a5a6';
             setTimeout(() => {
                 btn.textContent = 'Invite';
@@ -1248,19 +1435,19 @@ socket.on('invite_result', (data) => {
 // Socket: Receive Invite
 socket.on('receive_invite', (data) => {
     console.log('Received invite from:', data.hostName, 'Room:', data.roomId);
-    // If I'm already in a room (and it's not the same room), show alert? 
-    // Or just show modal regardless.
-    // If I am in the same room, ignore.
     if (currentRoomId === data.roomId) return;
 
     currentInviteData = data;
 
-    inviterName.textContent = data.hostName;
+    const inviteContainer = document.getElementById('invite-text-container');
+    if (inviteContainer) {
+        inviteContainer.innerHTML = languageManager.get('game.invited_you', { name: `<span id="inviter-name" class="highlight-text">${data.hostName}</span>` });
+    }
     inviterAvatar.src = `assets/img/user-img/${data.hostAvatar}`;
     incomingInviteModalOverlay.style.display = 'flex';
 
     // Play notification sound
-    playSFX(sfxClick); // Reusing click for now or add new sound
+    playSFX(sfxClick);
 });
 
 // Accept Invite
@@ -1365,10 +1552,20 @@ const modalMessage = document.getElementById('modal-message');
 const modalBtnConfirm = document.getElementById('modal-btn-confirm');
 const modalBtnCancel = document.getElementById('modal-btn-cancel');
 
+// Set default text for buttons from language manager immediately if available
+if (typeof languageManager !== 'undefined') {
+    modalBtnConfirm.innerText = languageManager.get('modal.ok');
+    modalBtnCancel.innerText = languageManager.get('modal.cancel');
+}
+
 let currentModalConfirm = null;
 let currentModalCancel = null;
 
-function showModal(title, message, onConfirm = null, onCancel = null, confirmText = 'OK', cancelText = 'Cancel') {
+function showModal(title, message, onConfirm = null, onCancel = null, confirmText = null, cancelText = null) {
+    // defaults
+    if (!confirmText) confirmText = languageManager.get('modal.ok');
+    if (!cancelText) cancelText = languageManager.get('modal.cancel');
+
     modalTitle.innerText = title;
     modalMessage.innerHTML = message;
 
@@ -1401,6 +1598,83 @@ const btnStartGame = document.getElementById('btn-start-game');
 
 const modeSelectionView = document.getElementById('mode-selection-view');
 const configurationView = document.getElementById('configuration-view');
+
+// STATS SYSTEM LOGIC
+const btnViewStats = document.getElementById('btn-view-stats');
+const statsModalOverlay = document.getElementById('stats-modal-overlay');
+const btnCloseStats = document.getElementById('btn-close-stats');
+const statGames = document.getElementById('stat-games');
+const statWins = document.getElementById('stat-wins');
+const statScore = document.getElementById('stat-score');
+
+if (btnViewStats) {
+    btnViewStats.addEventListener('click', async () => {
+        console.log('[STATS CLIENT] Stats button clicked');
+        console.log('[STATS CLIENT] currentUser:', currentUser);
+        console.log('[STATS CLIENT] db:', db);
+
+        if (!currentUser) {
+            console.warn('[STATS CLIENT] No currentUser, aborting');
+            return; // Should be logged in
+        }
+
+        statsModalOverlay.style.display = 'flex';
+
+        // Show loading state
+        statGames.textContent = '-';
+        statWins.textContent = '-';
+        statScore.textContent = '-';
+
+        try {
+            console.log('[STATS CLIENT] Fetching stats for UID:', currentUser.uid);
+            const userDoc = await db.collection('users').doc(currentUser.uid).get();
+            console.log('[STATS CLIENT] userDoc.exists:', userDoc.exists);
+
+            if (userDoc.exists) {
+                const data = userDoc.data();
+                console.log('[STATS CLIENT] User data:', data);
+
+                // Handle both nested stats object and flat dot-notation properties
+                const stats = data.stats || {};
+                const gamesPlayed = stats.gamesPlayed || data['stats.gamesPlayed'] || 0;
+                const wins = stats.wins || data['stats.wins'] || 0;
+                const totalScore = stats.totalScore || data['stats.totalScore'] || 0;
+
+                console.log('[STATS CLIENT] Parsed stats:', { gamesPlayed, wins, totalScore });
+
+                statGames.textContent = gamesPlayed;
+                statWins.textContent = wins;
+                statScore.textContent = formatScore(totalScore);
+
+                console.log('[STATS CLIENT] Stats displayed successfully');
+            } else {
+                console.warn('[STATS CLIENT] User document does not exist');
+                statGames.textContent = 0;
+                statWins.textContent = 0;
+                statScore.textContent = 0;
+            }
+        } catch (e) {
+            console.error("[STATS CLIENT] Error fetching stats:", e);
+        }
+    });
+}
+
+if (btnCloseStats) {
+    btnCloseStats.addEventListener('click', () => {
+        statsModalOverlay.style.display = 'none';
+    });
+}
+
+// Helper: Format Score (k/M)
+function formatScore(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+}
 const btnBackMode = document.getElementById('btn-back-mode');
 const guestModeMsg = document.getElementById('guest-mode-msg');
 const modeCards = document.querySelectorAll('.mode-card');
@@ -1447,81 +1721,109 @@ function switchScreen(screenId) {
 window.addEventListener('beforeunload', (e) => {
     if (currentRoomId) {
         e.preventDefault();
-        e.returnValue = "Are you sure you want to leave the game?";
+        e.returnValue = languageManager.get('game.beforeunload');
     }
 });
 
 // Avatar Selection Logic
+let tempSelectedAvatar = null;
 
-// Toggle Dropdown
+// Open Avatar Modal
 avatarSelectorBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent document click from closing immediately
-    avatarDropdown.classList.toggle('active');
-});
+    e.stopPropagation();
+    document.getElementById('avatar-modal-overlay').style.display = 'flex';
 
-// Select Avatar
-avatarOptions.forEach(opt => {
-    opt.addEventListener('click', () => {
-        const src = opt.getAttribute('data-src');
+    // Reset temp to current actual
+    tempSelectedAvatar = myAvatar;
 
-        // Restriction: Guests can only use avatar_1.png
-        if (!currentUser && src !== 'avatar_1.png') {
-            showModal('Premium Feature', 'Please <b>Login</b> or <b>Sign Up</b> to unlock all avatars!');
-            return;
-        }
-
-        myAvatar = src;
-
-        // Update Preview
-        selectedAvatarPreview.src = `assets/img/user-img/${src}`;
-
-        // Update Selected State
-        avatarOptions.forEach(o => o.classList.remove('selected'));
-        opt.classList.add('selected');
-
-        // Close Dropdown
-        avatarDropdown.classList.remove('active');
-
-        // Sync with Firebase if logged in
-        if (currentUser) {
-            currentUser.updateProfile({
-                photoURL: myAvatar
-            }).then(() => {
-                console.log('Avatar synced to Firebase');
-                syncUserToDB(currentUser); // Persist to Firestore Users
-            }).catch(err => {
-                console.error('Error syncing avatar:', err);
-            });
-        }
-    });
-});
-
-// Close dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!avatarSelectorBtn.contains(e.target) && !avatarDropdown.contains(e.target)) {
-        avatarDropdown.classList.remove('active');
+    // Highlight current
+    const grid = document.getElementById('avatar-grid-modal');
+    if (grid) {
+        grid.querySelectorAll('.avatar-option').forEach(o => {
+            o.classList.remove('selected');
+            if (o.getAttribute('data-src') === myAvatar) o.classList.add('selected');
+        });
     }
 });
+
+// Save Avatar (btn-save-avatar)
+const btnSaveAvatar = document.getElementById('btn-save-avatar');
+if (btnSaveAvatar) {
+    btnSaveAvatar.addEventListener('click', () => {
+        if (tempSelectedAvatar) {
+            myAvatar = tempSelectedAvatar;
+            localStorage.setItem('avatar', myAvatar);
+
+            // Update Main Preview
+            selectedAvatarPreview.src = `assets/img/user-img/${myAvatar}`;
+
+            // Sync with Firebase if logged in
+            if (currentUser) {
+                currentUser.updateProfile({
+                    photoURL: myAvatar
+                }).then(() => {
+                    console.log('Avatar synced to Firebase');
+                    syncUserToDB(currentUser);
+                }).catch(err => {
+                    console.error('Error syncing avatar:', err);
+                });
+            }
+        }
+        // Close
+        document.getElementById('avatar-modal-overlay').style.display = 'none';
+
+        // Play Sound
+        if (typeof playSFX === 'function' && typeof sfxClick !== 'undefined') {
+            playSFX(sfxClick);
+        }
+    });
+}
+
+// Close on click outside (Cancel)
+const avatarModalOverlay = document.getElementById('avatar-modal-overlay');
+if (avatarModalOverlay) {
+    avatarModalOverlay.addEventListener('click', (e) => {
+        if (e.target === avatarModalOverlay) {
+            avatarModalOverlay.style.display = 'none';
+        }
+    });
+}
+
+// Select Option (Visual only)
+const avatarGridModal = document.getElementById('avatar-grid-modal');
+if (avatarGridModal) {
+    avatarGridModal.querySelectorAll('.avatar-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const src = option.getAttribute('data-src');
+
+            // Restriction: Guests can only use avatar_1.png
+            if (!currentUser && src !== 'avatar_1.png') {
+                showModal(languageManager.get('premium.avatar_title'), languageManager.get('premium.avatar_msg'));
+                return;
+            }
+
+            tempSelectedAvatar = src;
+
+            // Update Selected State in Modal (Visual)
+            avatarGridModal.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+            option.classList.add('selected');
+
+            // Optional: Preview feedback sound
+            if (typeof playSFX === 'function' && typeof sfxClick !== 'undefined') {
+                playSFX(sfxClick);
+            }
+        });
+    });
+}
 
 // 1. Login
 // 1. Login Logic
 function handleGuestLogin() {
     const name = usernameInput.value.trim();
     if (name) {
-        btnLogin.disabled = true; // Prevent double click
-        setTimeout(() => btnLogin.disabled = false, 2000); // Re-enable after delay
-        myUsername = name;
-
-        // Save to LocalStorage
-        localStorage.setItem('username', name);
-        localStorage.setItem('avatar', myAvatar);
-
-        // Emit login event to server to verify connection and track UUID
-        // We use the Firebase UID as the unique identifier for the server to map sockets
-        socket.emit('login', { name: myUsername, uuid: myUUID });
-        switchScreen('lobby-section');
+        // ... (rest unchanged)
     } else {
-        showModal('Error', 'Please enter a username!');
+        showModal(languageManager.get('modal.error_title'), languageManager.get('auth.error_username_empty'));
     }
 }
 
@@ -1607,7 +1909,7 @@ function handleGoogleSign() {
                     })
                     .catch((error) => {
                         console.error('Firebase Auth Error:', error);
-                        showAuthError('Login Error: ' + error.message);
+                        showAuthError(languageManager.get('auth.error_login', { msg: error.message }));
                     });
             },
             function (msg) {
@@ -1617,7 +1919,8 @@ function handleGoogleSign() {
 
                 if (msg !== '12501' && msg !== 'cancelled') {
                     console.error('Native Google Error:', msg);
-                    showAuthError('Google Login Error: ' + (typeof msg === 'object' ? JSON.stringify(msg) : msg));
+                    const errorMsg = (typeof msg === 'object') ? JSON.stringify(msg) : msg;
+                    showAuthError(languageManager.get('auth.error_google', { msg: errorMsg }));
                 }
             }
         );
@@ -1665,7 +1968,7 @@ formRegister.addEventListener('submit', (e) => {
     const password = document.getElementById('reg-password').value;
 
     if (!username) {
-        showAuthError("Please enter a username");
+        showAuthError(languageManager.get('auth.error_username_empty'));
         return;
     }
 
@@ -1708,6 +2011,37 @@ auth.onAuthStateChanged(async (user) => {
         myUUID = user.uid; // Use Firebase UID
         syncUserToDB(user); // Sync Profile for Search
         console.log('User is logged in:', user.displayName, 'UUID:', myUUID);
+
+        // Fetch User Preferences (Audio)
+        db.collection('users').doc(user.uid).get().then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+
+                // Sync Music Volume
+                if (data.musicVolume !== undefined) {
+                    if (musicManager) {
+                        musicManager.setUserVolume(data.musicVolume);
+                        // Update UI if exists
+                        const musicSlider = document.getElementById('input-music-volume');
+                        if (musicSlider) musicSlider.value = Math.round(data.musicVolume * 20);
+                    }
+                }
+
+                // Sync SFX Volume
+                if (data.sfxVolume !== undefined) {
+                    userSFXVolume = data.sfxVolume;
+                    localStorage.setItem('sfxVolume', userSFXVolume);
+                    // Update UI if exists
+                    const sfxSlider = document.getElementById('input-sfx-volume');
+                    if (sfxSlider) sfxSlider.value = Math.round(data.sfxVolume * 20);
+                }
+
+                // Sync Language
+                if (data.language) {
+                    languageManager.setLanguage(data.language);
+                }
+            }
+        }).catch(err => console.error("Error fetching user prefs:", err));
 
         // Start Listening for Friend Requests & Friends - WAIT for initial load
         await Promise.all([
@@ -1874,7 +2208,7 @@ btnPlayAuth.addEventListener('click', () => {
 btnLogout.addEventListener('click', async () => {
     await setOffline();
     auth.signOut().then(() => {
-        showModal('Signed Out', 'You have been signed out successfully.', () => {
+        showModal(languageManager.get('auth.signed_out_title'), languageManager.get('auth.signed_out_msg'), () => {
             location.reload();
         });
     });
@@ -1887,14 +2221,6 @@ const btnCloseSettings = document.getElementById('btn-close-settings');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 const settingsUsernameInput = document.getElementById('settings-username');
 const btnDeleteAccount = document.getElementById('btn-delete-account'); // New
-const btnViewStats = document.getElementById('btn-view-stats'); // New
-
-// Stats Modal Elements
-const statsModalOverlay = document.getElementById('stats-modal-overlay');
-const btnCloseStats = document.getElementById('btn-close-stats');
-const statGames = document.getElementById('stat-games');
-const statWins = document.getElementById('stat-wins');
-const statScore = document.getElementById('stat-score');
 
 btnAccountSettings.addEventListener('click', () => {
     if (currentUser) {
@@ -1911,23 +2237,6 @@ settingsModalOverlay.addEventListener('click', (e) => {
     if (e.target === settingsModalOverlay) {
         settingsModalOverlay.style.display = 'none';
     }
-});
-
-// View Stats
-btnViewStats.addEventListener('click', () => {
-    settingsModalOverlay.style.display = 'none'; // Close settings
-    statsModalOverlay.style.display = 'flex';
-
-    // Load Stats (From LocalStorage for now, keyed by UUID)
-    // In a real app with Firestore, we would fetch() here.
-    const savedStats = JSON.parse(localStorage.getItem(`stats_${myUUID}`)) || { games: 0, wins: 0, score: 0 };
-    statGames.textContent = savedStats.games;
-    statWins.textContent = savedStats.wins;
-    statScore.textContent = savedStats.score;
-});
-
-btnCloseStats.addEventListener('click', () => {
-    statsModalOverlay.style.display = 'none';
 });
 
 // Friends Modal
@@ -1973,8 +2282,8 @@ friendTabs.forEach(tab => {
 // Delete Account
 btnDeleteAccount.addEventListener('click', () => {
     showModal(
-        'Delete Account',
-        'Are you sure you want to permanently delete your account? This cannot be undone.',
+        languageManager.get('settings.delete_title'),
+        languageManager.get('settings.delete_msg'),
         () => {
             // Confirm Logic
             if (currentUser) {
@@ -1984,7 +2293,7 @@ btnDeleteAccount.addEventListener('click', () => {
 
                     // Explicitly sign out and reload
                     auth.signOut().then(() => {
-                        showModal('Account Deleted', 'Your account has been deleted permanently.', () => {
+                        showModal(languageManager.get('settings.deleted_title'), languageManager.get('settings.deleted_msg'), () => {
                             location.reload();
                         });
                     });
@@ -1992,9 +2301,9 @@ btnDeleteAccount.addEventListener('click', () => {
                 }).catch(error => {
                     console.error(error);
                     if (error.code === 'auth/requires-recent-login') {
-                        showModal('Security Check', 'Please sign out and sign in again to delete your account.');
+                        showModal(languageManager.get('settings.security_check_title'), languageManager.get('settings.security_check_msg'));
                     } else {
-                        showModal('Error', 'Could not delete account: ' + error.message);
+                        showModal(languageManager.get('modal.error_title'), languageManager.get('settings.error_delete', { msg: error.message }));
                     }
                 });
             }
@@ -2005,39 +2314,64 @@ btnDeleteAccount.addEventListener('click', () => {
     );
 });
 
-// Save Settings (Username)
-btnSaveSettings.addEventListener('click', () => {
-    const newName = settingsUsernameInput.value.trim();
-    if (newName && currentUser) {
-        if (newName === currentUser.displayName) {
-            settingsModalOverlay.style.display = 'none';
-            return;
+// Save Settings (Username & Language)
+btnSaveSettings.addEventListener('click', async () => {
+    if (!currentUser) return;
+
+    const btn = btnSaveSettings;
+    const originalText = btn.innerText;
+    btn.innerText = languageManager.get('settings.saving');
+    btn.disabled = true;
+
+    try {
+        const newName = settingsUsernameInput.value.trim();
+        const newLang = document.getElementById('input-language').value;
+        const currentLang = localStorage.getItem('language') || 'en';
+        let didChangeLang = false;
+
+        // 1. Handle Language Change
+        if (newLang !== currentLang) {
+            console.log(`Language changed: ${currentLang} -> ${newLang}`);
+            localStorage.setItem('language', newLang); // Immediate local save
+
+            // Sync to Firestore
+            await db.collection('users').doc(currentUser.uid).update({
+                language: newLang
+            }).catch(e => console.error('Error syncing language:', e));
+
+            didChangeLang = true;
         }
 
-        // Update Firebase
-        currentUser.updateProfile({
-            displayName: newName
-        }).then(() => {
-            console.log('Username updated');
+        // 2. Handle Username Change
+        if (newName && newName !== currentUser.displayName) {
+            await currentUser.updateProfile({ displayName: newName });
 
             // Update Local State
             myUsername = newName;
             userDisplayName.textContent = newName;
             usernameInput.value = newName;
 
-            // Sync to Firestore Users collection so friends see updated name
-            syncUserToDB(currentUser);
+            // Sync to Firestore Users collection
+            await syncUserToDB(currentUser);
+        } else if (!newName) {
+            throw new Error(languageManager.get('settings.error_username_empty'));
+        }
 
-            // Feedback
-            settingsModalOverlay.style.display = 'none';
-            showModal('Success', 'Username updated successfully!');
+        // 3. Finish
+        settingsModalOverlay.style.display = 'none';
 
-        }).catch(err => {
-            console.error(err);
-            showModal('Error', 'Failed to update username.');
-        });
-    } else {
-        showModal('Error', 'Username cannot be empty.');
+        if (didChangeLang) {
+            location.reload();
+        } else {
+            showModal(languageManager.get('modal.success_title'), languageManager.get('modal.settings_saved'));
+        }
+
+    } catch (error) {
+        console.error(error);
+        showModal('Error', error.message || 'Failed to save settings.');
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 });
 
@@ -2051,54 +2385,62 @@ const tutorialContent = document.getElementById('tutorial-content');
 
 const tutorials = {
     'root_rush': {
-        title: 'How to Play: Root Rush',
-        html: `
-            <p><strong>Goal:</strong> Calculate the square root of the number shown.</p>
-            <p><strong>Gameplay:</strong></p>
-            <ul>
-                <li>A number will appear (e.g., 144).</li>
-                <li>Type the square root (e.g., 12) as fast as you can.</li>
-                <li>The faster you answer, the more points you get!</li>
-            </ul>
-        `
+        get title() { return languageManager.get('tutorial.root_rush.title'); },
+        get html() {
+            return `
+                <p><strong>${languageManager.get('tutorial.root_rush.goal')}</strong></p>
+                <p><strong>${languageManager.get('game.round')}:</strong></p>
+                <ul>
+                    <li>${languageManager.get('tutorial.root_rush.step1')}</li>
+                    <li>${languageManager.get('tutorial.root_rush.step2')}</li>
+                    <li>${languageManager.get('tutorial.root_rush.step3')}</li>
+                </ul>
+            `;
+        }
     },
     'prime_master': {
-        title: 'How to Play: Prime Master',
-        html: `
-            <p><strong>Goal:</strong> Select the prime number of four possible answers.</p>
-            <p><strong>Gameplay:</strong></p>
-            <ul>
-                <li>Four numbers will appear.</li>
-                <li>Click the prime number as fast as you can.</li>
-                <li>Answer faster than the other players to score points!</li>
-            </ul>
-        `
+        get title() { return languageManager.get('tutorial.prime_master.title'); },
+        get html() {
+            return `
+                <p><strong>${languageManager.get('tutorial.prime_master.goal')}</strong></p>
+                <p><strong>${languageManager.get('game.round')}:</strong></p>
+                <ul>
+                    <li>${languageManager.get('tutorial.prime_master.step1')}</li>
+                    <li>${languageManager.get('tutorial.prime_master.step2')}</li>
+                    <li>${languageManager.get('tutorial.prime_master.step3')}</li>
+                </ul>
+            `;
+        }
     },
     'twenty_four': {
-        title: 'How to Play: Twenty Four',
-        html: `
-            <p><strong>Goal:</strong> Make the number 24 using 4 numbers.</p>
-            <p><strong>Gameplay:</strong></p>
-            <ul>
-                <li>You are given four numbers (e.g., 4, 7, 8, 8).</li>
-                <li>Use addition (+), subtraction (-), multiplication (*), and division (/) to reach exactly 24.</li>
-                <li>Use any combination attempting to get 24.</li>
-                <li>Example: (8 - 4) * (8 - 2) = 24</li>
-            </ul>
-        `
+        get title() { return languageManager.get('tutorial.twenty_four.title'); },
+        get html() {
+            return `
+                <p><strong>${languageManager.get('tutorial.twenty_four.goal')}</strong></p>
+                <p><strong>${languageManager.get('game.round')}:</strong></p>
+                <ul>
+                    <li>${languageManager.get('tutorial.twenty_four.step1')}</li>
+                    <li>${languageManager.get('tutorial.twenty_four.step2')}</li>
+                    <li>${languageManager.get('tutorial.twenty_four.step3')}</li>
+                    <li>${languageManager.get('tutorial.twenty_four.example')}</li>
+                </ul>
+            `;
+        }
     },
     'binary_blitz': {
-        title: 'How to Play: Binary Blitz',
-        html: `
-            <p><strong>Goal:</strong> Convert the decimal number to binary.</p>
-            <p><strong>Gameplay:</strong></p>
-            <ul>
-                <li>A decimal number will appear (e.g., 13).</li>
-                <li>Type the binary equivalent (e.g., 1101) using the 0/1 keypad.</li>
-                <li>Be the fastest to get points!</li>
-                <li>Incorrect answers get 0 points.</li>
-            </ul>
-        `
+        get title() { return languageManager.get('tutorial.binary_blitz.title'); },
+        get html() {
+            return `
+                <p><strong>${languageManager.get('tutorial.binary_blitz.goal')}</strong></p>
+                <p><strong>${languageManager.get('game.round')}:</strong></p>
+                <ul>
+                    <li>${languageManager.get('tutorial.binary_blitz.step1')}</li>
+                    <li>${languageManager.get('tutorial.binary_blitz.step2')}</li>
+                    <li>${languageManager.get('tutorial.binary_blitz.step3')}</li>
+                    <li>${languageManager.get('tutorial.binary_blitz.step4')}</li>
+                </ul>
+            `;
+        }
     }
 };
 
@@ -2138,7 +2480,7 @@ tutorialModalOverlay.addEventListener('click', (e) => {
 });
 btnCreateRoom.addEventListener('click', () => {
     btnCreateRoom.disabled = true; // Prevent button spam
-    socket.emit('create_room', { username: myUsername, avatar: myAvatar });
+    socket.emit('create_room', { username: myUsername, avatar: myAvatar, uuid: myUUID });
     setTimeout(() => btnCreateRoom.disabled = false, 5000);
 });
 
@@ -2150,15 +2492,15 @@ btnJoinRoom.addEventListener('click', () => {
         socket.emit('join_room', { username: myUsername, roomId: code, avatar: myAvatar });
         setTimeout(() => btnJoinRoom.disabled = false, 2000); // Fallback re-enable
     } else {
-        showModal('Error', 'Please enter a room code!');
+        showModal(languageManager.get('modal.error_title'), languageManager.get('lobby.error_empty_code'));
     }
 });
 
 // 4. Leave Room
 btnLeaveRoom.addEventListener('click', () => {
     showModal(
-        'Leave Room',
-        'Are you sure you want to leave the room?',
+        languageManager.get('modal.leave_room_title'),
+        languageManager.get('modal.leave_room_msg'),
         () => {
             leaveRoom();
         },
@@ -2168,7 +2510,7 @@ btnLeaveRoom.addEventListener('click', () => {
 
 function leaveRoom() {
     if (currentRoomId) {
-        stopAllSounds();
+        stopGameplaySounds();
         socket.emit('leave_room', currentRoomId);
         currentRoomId = null;
         isHost = false;
@@ -2213,8 +2555,8 @@ btnCopyCode.addEventListener('click', () => {
 btnShareRoom.addEventListener('click', async () => {
     const shareUrl = `${window.location.origin}/?c=${currentRoomId}`;
     const shareData = {
-        title: 'Join Answer!',
-        text: `Play Answer with me! Code: ${currentRoomId}`,
+        title: languageManager.get('menu.share_room_title') || 'Join Answer!',
+        text: languageManager.get('menu.share_room_text', { code: currentRoomId }) || `Play Answer with me! Code: ${currentRoomId}`,
         url: shareUrl
     };
 
@@ -2226,12 +2568,12 @@ btnShareRoom.addEventListener('click', async () => {
             // User cancelled the share or an error occurred
             if (err.name !== 'AbortError') {
                 console.error('Error sharing:', err);
-                showModal('Share Error', 'Could not share the room. Please try again.');
+                showModal(languageManager.get('room.share_error_title'), languageManager.get('room.share_error_msg'));
             }
         }
     } else {
         // Browser doesn't support Web Share API
-        showModal('Share Not Available', 'Your browser does not support native sharing. Please copy the room code manually: ' + currentRoomId);
+        showModal(languageManager.get('room.share_not_available_title'), languageManager.get('room.share_not_available_msg', { code: currentRoomId }));
     }
 });
 
@@ -2274,7 +2616,8 @@ function updateLobbyUI(settings) {
             configurationView.style.flexDirection = 'column';
         }
         // Update Config Header / Room Badge (Common)
-        const niceName = settings.gameMode.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        const modeKey = `mode.${settings.gameMode}`;
+        const niceName = languageManager.get(modeKey);
         configModeName.innerText = niceName;
         roomModeDisplay.innerText = niceName;
         roomModeBadge.style.display = 'inline-flex';
@@ -2287,12 +2630,10 @@ function updateLobbyUI(settings) {
             // Reset header text to "Configure:" for host
             const configH2 = document.querySelector('#configuration-view h2');
             if (configH2 && configH2.firstChild && configH2.firstChild.nodeType === Node.TEXT_NODE) {
-                configH2.firstChild.textContent = "Configure: ";
+                configH2.firstChild.textContent = languageManager.get('config.configure');
             } else if (configH2) {
                 // Fallback if structure is lost
-                configH2.innerHTML = `Configure: <span id="config-mode-name" style="color: var(--primary);">${niceName}</span>`;
-                // Update global reference if we nuked it
-                // But better to trust the HTML structure is stable
+                configH2.innerHTML = `${languageManager.get('config.configure')}<span id="config-mode-name" style="color: var(--primary);">${niceName}</span>`;
             }
 
             // MODE-SPECIFIC CONFIGURATION UI (HOST)
@@ -2301,26 +2642,26 @@ function updateLobbyUI(settings) {
             console.log("updateLobbyUI DEBUG:", settings.gameMode);
 
             if (settings.gameMode === 'prime_master') {
-                modeTitle.innerText = "Configure Prime Master";
-                diffSelect.options[0].text = "Easy (10-99)";
-                diffSelect.options[1].text = "Normal (100-500)";
-                diffSelect.options[2].text = "Hard (200-999)";
+                modeTitle.innerText = `${languageManager.get('config.configure')} ${languageManager.get('mode.prime_master')}`;
+                diffSelect.options[0].text = languageManager.get('config.difficulty_prime_easy');
+                diffSelect.options[1].text = languageManager.get('config.difficulty_prime_normal');
+                diffSelect.options[2].text = languageManager.get('config.difficulty_prime_hard');
             } else if (settings.gameMode === 'twenty_four') {
-                modeTitle.innerText = "Configure Twenty Four";
-                diffSelect.options[0].text = "Easy";
-                diffSelect.options[1].text = "Normal";
-                diffSelect.options[2].text = "Hard";
+                modeTitle.innerText = `${languageManager.get('config.configure')} ${languageManager.get('mode.twenty_four')}`;
+                diffSelect.options[0].text = languageManager.get('config.difficulty_generic_easy');
+                diffSelect.options[1].text = languageManager.get('config.difficulty_generic_normal');
+                diffSelect.options[2].text = languageManager.get('config.difficulty_generic_hard');
             } else if (settings.gameMode === 'binary_blitz') {
-                modeTitle.innerText = "Configure Binary Blitz";
-                diffSelect.options[0].text = "Easy (0-31)";
-                diffSelect.options[1].text = "Normal (0-255)";
-                diffSelect.options[2].text = "Hard (0-4095)";
+                modeTitle.innerText = `${languageManager.get('config.configure')} ${languageManager.get('mode.binary_blitz')}`;
+                diffSelect.options[0].text = languageManager.get('config.difficulty_binary_easy');
+                diffSelect.options[1].text = languageManager.get('config.difficulty_binary_normal');
+                diffSelect.options[2].text = languageManager.get('config.difficulty_binary_hard');
             } else {
                 // Default: Root Rush
-                modeTitle.innerText = "Configure Root Rush";
-                diffSelect.options[0].text = "Easy (100-1k)";
-                diffSelect.options[1].text = "Normal (10k-1M)";
-                diffSelect.options[2].text = "Hard (1M-100M)";
+                modeTitle.innerText = `${languageManager.get('config.configure')} ${languageManager.get('mode.root_rush')}`;
+                diffSelect.options[0].text = languageManager.get('config.difficulty_easy');
+                diffSelect.options[1].text = languageManager.get('config.difficulty_normal');
+                diffSelect.options[2].text = languageManager.get('config.difficulty_hard');
             }
         } else {
             // GUEST VIEW CONFIG
@@ -2331,29 +2672,30 @@ function updateLobbyUI(settings) {
             // Update Header to "Game Mode:" for guest
             const configH2 = document.querySelector('#configuration-view h2');
             if (configH2 && configH2.firstChild && configH2.firstChild.nodeType === Node.TEXT_NODE) {
-                configH2.firstChild.textContent = "Game Mode: ";
+                configH2.firstChild.textContent = languageManager.get('config.game_mode');
             }
 
             // Update Guest Preview Values
-            pRounds.innerText = `${settings.rounds} Rounds`;
-            pTime.innerText = `${settings.timePerRound}s`;
+            pRounds.innerText = languageManager.get('game.rounds_count', { count: settings.rounds });
+            pTime.innerText = languageManager.get('game.seconds_count', { s: settings.timePerRound });
 
             let diffText = settings.difficulty.charAt(0).toUpperCase() + settings.difficulty.slice(1);
             if (settings.gameMode === 'prime_master') {
-                if (settings.difficulty === 'easy') diffText += " (10-99)";
-                if (settings.difficulty === 'normal') diffText += " (100-500)";
-                if (settings.difficulty === 'hard') diffText += " (200-999)";
-                if (settings.difficulty === 'hard') diffText += " (200-999)";
+                if (settings.difficulty === 'easy') diffText = languageManager.get('config.difficulty_prime_easy');
+                if (settings.difficulty === 'normal') diffText = languageManager.get('config.difficulty_prime_normal');
+                if (settings.difficulty === 'hard') diffText = languageManager.get('config.difficulty_prime_hard');
             } else if (settings.gameMode === 'twenty_four') {
-                // No extra text needed for 24 game
+                if (settings.difficulty === 'easy') diffText = languageManager.get('config.difficulty_generic_easy');
+                if (settings.difficulty === 'normal') diffText = languageManager.get('config.difficulty_generic_normal');
+                if (settings.difficulty === 'hard') diffText = languageManager.get('config.difficulty_generic_hard');
             } else if (settings.gameMode === 'binary_blitz') {
-                if (settings.difficulty === 'easy') diffText += " (0-31)";
-                if (settings.difficulty === 'normal') diffText += " (0-255)";
-                if (settings.difficulty === 'hard') diffText += " (0-4095)";
+                if (settings.difficulty === 'easy') diffText = languageManager.get('config.difficulty_binary_easy');
+                if (settings.difficulty === 'normal') diffText = languageManager.get('config.difficulty_binary_normal');
+                if (settings.difficulty === 'hard') diffText = languageManager.get('config.difficulty_binary_hard');
             } else {
-                if (settings.difficulty === 'easy') diffText += " (100-1k)";
-                if (settings.difficulty === 'normal') diffText += " (10k-1M)";
-                if (settings.difficulty === 'hard') diffText += " (1M-100M)";
+                if (settings.difficulty === 'easy') diffText = languageManager.get('config.difficulty_easy');
+                if (settings.difficulty === 'normal') diffText = languageManager.get('config.difficulty_normal');
+                if (settings.difficulty === 'hard') diffText = languageManager.get('config.difficulty_hard');
             }
             pDifficulty.innerText = diffText;
         }
@@ -2405,6 +2747,8 @@ function emitSettingsUpdate() {
     socket.emit('update_settings', { roomId: currentRoomId, settings });
 }
 
+
+
 roundsInput.addEventListener('input', () => {
     roundsDisplay.innerText = roundsInput.value;
     emitSettingsUpdate();
@@ -2434,10 +2778,42 @@ btnStartGame.addEventListener('click', () => {
 
 socket.on('room_created', (roomId) => {
     currentRoomId = roomId;
+    console.log(`[DEBUG] CLIENT: Room created! ID: ${roomId}`);
     currentRoomCodeDisplay.innerText = roomId;
     switchScreen('room-section');
     isHost = true;
     // Initial UI State will be set by update_settings event following this
+});
+
+socket.on('room_closed', (reason) => {
+    console.log(`[DEBUG] CLIENT: Room closed due to: ${reason}`);
+
+    // Hide warning
+    const warningEl = document.getElementById('inactivity-warning');
+    if (warningEl) warningEl.classList.remove('active');
+
+    leaveRoom(); // Reset UI
+    if (reason === 'inactivity') {
+        showModal(languageManager.get('modal.error_title'), languageManager.get('room.closed_inactivity'), () => {
+            location.reload();
+        }, null, 'OK');
+    } else {
+        showModal('Room Closed', 'The room has been closed.', () => { }, null, 'OK');
+    }
+});
+
+socket.on('error', (msg) => {
+    console.error(`[DEBUG] CLIENT: Socket Error: ${msg}`);
+    showModal('Error', msg, () => { }, null, 'OK');
+});
+
+socket.on('room_idle_warning', (data) => {
+    console.log('Room inactivity warning received', data);
+    const warningEl = document.getElementById('inactivity-warning');
+    const textEl = document.getElementById('inactivity-warning-text');
+
+    if (textEl) textEl.innerText = languageManager.get('room.closing_warning');
+    if (warningEl) warningEl.classList.add('active');
 });
 
 socket.on('room_joined', (roomId) => {
@@ -2697,11 +3073,11 @@ socket.on('new_round', (data) => {
     const instructionEl = document.getElementById('game-instruction');
     if (instructionEl) {
         let text = "";
-        const mode = currentSettings.gameMode;
-        if (mode === 'root_rush') text = "Estimate the result of this square root!";
-        else if (mode === 'prime_master') text = "Find the prime number faster than other players!";
-        else if (mode === 'twenty_four') text = "Use the numbers and operators to make exactly 24!";
-        else if (mode === 'binary_blitz') text = "Quick! Be the fastest player to convert this decimal to binary!";
+        const mode = (currentSettings.gameMode || '').toLowerCase(); // Ensure robustness
+        if (mode === 'root_rush') text = languageManager.get('game.instructions.root_rush');
+        else if (mode === 'prime_master') text = languageManager.get('game.instructions.prime_master');
+        else if (mode === 'twenty_four') text = languageManager.get('game.instructions.twenty_four');
+        else if (mode === 'binary_blitz') text = languageManager.get('game.instructions.binary_blitz');
         instructionEl.innerText = text;
     }
 
@@ -2890,7 +3266,7 @@ gameInput.addEventListener('input', (e) => {
 
 socket.on('answer_feedback', (data) => {
     if (!data.correct) {
-        feedbackContainer.innerText = "Wrong!";
+        feedbackContainer.innerText = languageManager.get('game.wrong');
         feedbackContainer.className = "feedback-message feedback-error";
         gameplayArea.classList.add('shake');
         setTimeout(() => gameplayArea.classList.remove('shake'), 500);
@@ -2945,8 +3321,8 @@ socket.on('round_result', (data) => {
     if (data.winner === "No one") {
         winnerSection.classList.add('no-winner');
         winnerSection.classList.remove('is-tie');
-        winnerNameEl.innerText = "No one got it right!";
-        winnerLabel.innerText = "Try faster next time!";
+        winnerNameEl.innerText = languageManager.get('results.no_winner');
+        winnerLabel.innerText = languageManager.get('results.try_faster');
         winnerLabel.style.display = 'inline';
         winnerIcon.style.display = 'none';
     } else if (isTie) {
@@ -2955,24 +3331,24 @@ socket.on('round_result', (data) => {
         winnerSection.classList.add('is-tie');
         winnerIcon.className = 'fa-solid fa-handshake';
         winnerIcon.style.display = 'block';
-        winnerNameEl.innerText = "It's a tie!";
-        winnerLabel.innerText = data.mode === 'prime_master' ? "Multiple players were just as fast!" : "Multiple players had the same difference";
+        winnerNameEl.innerText = languageManager.get('results.tie_title');
+        winnerLabel.innerText = data.mode === 'prime_master' ? languageManager.get('results.tie_desc_prime') : languageManager.get('results.tie_desc_generic');
         winnerLabel.style.display = 'inline';
     } else if (isWinner) {
         // Yo gané
         winnerSection.classList.remove('no-winner', 'is-tie');
         winnerIcon.className = 'fa-solid fa-trophy';
         winnerIcon.style.display = 'block';
-        winnerNameEl.innerText = "You won this round!";
-        winnerLabel.innerText = "You were the closest!";
+        winnerNameEl.innerText = languageManager.get('results.you_won');
+        winnerLabel.innerText = languageManager.get('results.you_closest');
         winnerLabel.style.display = 'inline';
     } else {
         // Otro ganó
         winnerSection.classList.remove('no-winner', 'is-tie');
         winnerIcon.className = 'fa-solid fa-times-circle';
         winnerIcon.style.display = 'block';
-        winnerNameEl.innerText = `${data.winner} won`;
-        winnerLabel.innerText = "was the closest";
+        winnerNameEl.innerText = languageManager.get('results.player_won', { name: data.winner });
+        winnerLabel.innerText = languageManager.get('results.was_closest');
         winnerLabel.style.display = 'inline';
     }
 
@@ -3004,7 +3380,7 @@ socket.on('round_result', (data) => {
 
             const playerName = document.createElement('div');
             playerName.className = 'player-name';
-            playerName.innerText = r.name + (isMe ? ' (You)' : '');
+            playerName.innerText = r.name + (isMe ? languageManager.get('room.you') : '');
 
             const playerDetails = document.createElement('div');
             playerDetails.className = 'player-details';
@@ -3045,7 +3421,8 @@ socket.on('round_result', (data) => {
 
             const points = document.createElement('div');
             points.className = 'points-earned';
-            points.innerText = r.awarded ? `+${r.awarded}` : '0';
+            points.innerText = r.awarded ? `+${r.awarded}` : '0'; // Keep + as it's a math game, or translate if needed. For now it's fine.
+            // But let's use the translated points count for the podium at least.
 
             row.appendChild(rankNum);
             row.appendChild(playerInfo);
@@ -3114,7 +3491,7 @@ socket.on('game_over', (sortedUsers) => {
         if (placeEl) {
             placeEl.style.visibility = 'visible';
             document.getElementById(`podium-name-${rank}`).innerText = user.name;
-            document.getElementById(`podium-score-${rank}`).innerText = `${user.score} pts`;
+            document.getElementById(`podium-score-${rank}`).innerText = languageManager.get('results.points_count', { pts: user.score });
 
             // Update Avatar
             const avatarContainer = placeEl.querySelector('.podium-avatar');
@@ -3272,7 +3649,7 @@ socket.on('update_users', (users) => {
         avatarImg.style.boxShadow = '0 0 0 1px #dfe6e9';
 
         const nameSpan = document.createElement('span');
-        nameSpan.innerText = user.name + (user.id === socket.id ? ' (You)' : '');
+        nameSpan.innerText = user.name + (user.id === socket.id ? languageManager.get('room.you') : '');
 
         leftSide.appendChild(avatarImg);
         leftSide.appendChild(nameSpan);
@@ -3282,7 +3659,7 @@ socket.on('update_users', (users) => {
         if (users[0].id === user.id) { // Show who is host
             const crown = document.createElement('i');
             crown.className = 'fas fa-crown';
-            crown.title = 'Host';
+            crown.title = languageManager.get('room.host') || 'Host';
             crown.style.marginLeft = '8px';
             crown.style.color = '#f1c40f';
             leftSide.appendChild(crown);
@@ -3294,13 +3671,13 @@ socket.on('update_users', (users) => {
             const kickBtn = document.createElement('button');
             kickBtn.className = 'btn-kick-player'; // Match CSS
             kickBtn.innerHTML = '<i class="fas fa-user-times"></i>'; // Icon for kick
-            kickBtn.title = `Kick ${user.name}`;
+            kickBtn.title = languageManager.get('modal.kick_player_title');
 
             kickBtn.onclick = (e) => {
                 e.stopPropagation();
                 showModal(
-                    'Kick Player',
-                    `Are you sure you want to kick <b>${user.name}</b>?`,
+                    languageManager.get('modal.kick_player_title'),
+                    languageManager.get('modal.kick_player_msg', { name: user.name }),
                     () => {
                         socket.emit('kick_player', { roomId: currentRoomId, targetId: user.id });
                     },
@@ -3324,7 +3701,11 @@ socket.on('update_users', (users) => {
 });
 
 socket.on('error', (msg) => {
-    showModal('Error', msg);
+    let translatedMsg = msg;
+    if (msg === 'Room not found') translatedMsg = languageManager.get('lobby.error_no_room');
+    else if (msg === 'Please enter a room code!') translatedMsg = languageManager.get('lobby.error_empty_code');
+
+    showModal(languageManager.get('modal.error_title'), translatedMsg);
     // Re-enable buttons immediately so user can try again
     btnJoinRoom.disabled = false;
     btnCreateRoom.disabled = false;
@@ -3346,7 +3727,7 @@ function initializeTwentyFourGame(numbers) {
     const operatorArea = document.getElementById('tf-operator-area');
 
     handArea.innerHTML = '';
-    equationArea.innerHTML = '<div class="tf-placeholder">Make 24! Click or drag numbers/operators.</div>';
+    equationArea.innerHTML = `<div class="tf-placeholder">${languageManager.get('tf_game.placeholder_drag')}</div>`;
 
     // Clear operators selection state if any
 
@@ -3502,7 +3883,7 @@ function moveTileToEquation(tile) {
 function checkPlaceholder() {
     const equationArea = document.getElementById('tf-equation-area');
     if (equationArea.children.length === 0) {
-        equationArea.innerHTML = '<div class="tf-placeholder">Drag numbers and operators here...</div>';
+        equationArea.innerHTML = `<div class="tf-placeholder">${languageManager.get('tf_game.placeholder_drag')}</div>`;
     }
 }
 
@@ -3511,7 +3892,7 @@ function submitTwentyFourAnswer() {
     const tiles = Array.from(equationArea.children);
 
     if (tiles.some(t => t.classList.contains('tf-placeholder'))) {
-        showModal('Error', 'Please build an expression first!');
+        showModal(languageManager.get('modal.error_title'), languageManager.get('tf_game.error_build'));
         return;
     }
 
@@ -3530,7 +3911,7 @@ function submitTwentyFourAnswer() {
     // We used to check numsUsed < 4, but user requested allowing subsets.
     const numsUsed = tiles.filter(t => t.classList.contains('number-tile')).length;
     if (numsUsed === 0) {
-        showModal('Hint', 'You must use at least one number!');
+        showModal(languageManager.get('modal.hint_title'), languageManager.get('tf_game.error_no_num'));
         return;
     }
 
@@ -3538,4 +3919,62 @@ function submitTwentyFourAnswer() {
 
     const waitingOverlay = document.getElementById('waiting-overlay');
     if (waitingOverlay) waitingOverlay.style.display = 'flex';
+}
+
+
+
+// Audio Sliders Logic (Now safe to run as musicManager is defined)
+const musicSlider = document.getElementById('input-music-volume');
+const sfxSlider = document.getElementById('input-sfx-volume');
+
+if (musicSlider) {
+    // Map 0.0-1.0 back to 0-20
+    musicSlider.value = Math.round(musicManager.userVolume * 20);
+
+    musicSlider.addEventListener('input', () => {
+        const val = parseInt(musicSlider.value) / 20;
+        musicManager.setUserVolume(val);
+
+        // Sync to Firestore if logged in
+        if (currentUser) {
+            db.collection('users').doc(currentUser.uid).update({
+                musicVolume: val
+            }).catch(err => console.error("Error saving music volume:", err));
+        }
+    });
+}
+
+if (sfxSlider) {
+    // Map 0.0-1.0 back to 0-20
+    // Ensure userSFXVolume is valid (declared at top of file)
+    sfxSlider.value = Math.round((typeof userSFXVolume !== 'undefined' ? userSFXVolume : 1.0) * 20);
+
+    sfxSlider.addEventListener('input', () => {
+        const val = parseInt(sfxSlider.value) / 20;
+        userSFXVolume = val;
+        localStorage.setItem('sfxVolume', userSFXVolume);
+
+        // Sync to Firestore if logged in
+        if (currentUser) {
+            db.collection('users').doc(currentUser.uid).update({
+                sfxVolume: val
+            }).catch(err => console.error("Error saving sfx volume:", err));
+        }
+
+        // Play click sound for feedback
+        // Use global sfxClick
+        if (typeof sfxClick !== 'undefined') {
+            const feedbackClick = sfxClick.cloneNode();
+            feedbackClick.volume = 0.5 * userSFXVolume;
+            feedbackClick.play().catch(e => { console.log("Feedback blocked", e) });
+        }
+    });
+
+    // Language Selector Logic
+    // Language Selector Logic
+    const languageSelector = document.getElementById('input-language');
+    if (languageSelector) {
+        languageSelector.value = localStorage.getItem('language') || 'en';
+        // No listener here - changes applied on Save
+    }
 }
