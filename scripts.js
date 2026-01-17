@@ -1,5 +1,5 @@
 // Use configured server URL or default to window origin (automatic for web, manual for mobile)
-const APP_VERSION = '1.0.0'; // IMPORTANT: Keep this in sync with config.xml version
+const APP_VERSION = '1.1.0'; // IMPORTANT: Keep this in sync with config.xml version
 const MOBILE_APP_URL = 'https://github.com/abeloskyyy/Answer/releases/latest/download/answer-1.0.0-alpha.apk';
 
 const SERVER_URL = (window.GAME_CONFIG && window.GAME_CONFIG.SERVER_URL) ? window.GAME_CONFIG.SERVER_URL : undefined;
@@ -1002,7 +1002,11 @@ async function checkUpdate() {
                 languageManager.get('loading.update_available_msg', { version: latest.version, notes: latest.notes }) || `Version ${latest.version}:\n${latest.notes}\n\nDo you want to update now?`,
                 () => {
                     // Open URL in system browser (Play Store or APK download)
-                    window.open(latest.downloadUrl, '_system');
+                    if (window.cordova && window.cordova.InAppBrowser) {
+                        cordova.InAppBrowser.open(latest.downloadUrl, '_system');
+                    } else {
+                        window.open(latest.downloadUrl, '_system');
+                    }
 
                     // If critical, re-show modal if they come back (or don't allow closing easily)
                     if (latest.critical) {
@@ -1016,7 +1020,14 @@ async function checkUpdate() {
                         showModal(
                             languageManager.get('loading.update_required_title') || 'Required update',
                             languageManager.get('loading.update_required_msg') || 'This update is required to continue playing.',
-                            () => { window.open(latest.downloadUrl, '_system'); setTimeout(() => checkUpdate(), 500); },
+                            () => {
+                                if (window.cordova && window.cordova.InAppBrowser) {
+                                    cordova.InAppBrowser.open(latest.downloadUrl, '_system');
+                                } else {
+                                    window.open(latest.downloadUrl, '_system');
+                                }
+                                setTimeout(() => checkUpdate(), 500);
+                            },
                             () => checkUpdate(), // Loop back
                             'Update',
                             null // Hide cancel button visually or just loop
@@ -1572,8 +1583,8 @@ function showModal(title, message, onConfirm = null, onCancel = null, confirmTex
     modalBtnConfirm.innerText = confirmText;
     modalBtnCancel.innerText = cancelText;
 
-    // Reset display
-    modalBtnCancel.style.display = onCancel ? 'inline-block' : 'none';
+    // Reset display - hide cancel button if no callback OR no text provided
+    modalBtnCancel.style.display = (onCancel && cancelText) ? 'inline-block' : 'none';
 
     // Assign handlers directly (overwriting previous ones)
     modalBtnConfirm.onclick = () => {
